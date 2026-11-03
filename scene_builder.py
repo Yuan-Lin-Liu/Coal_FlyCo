@@ -2,13 +2,18 @@
 
 Call build_scene(stage) after SimulationApp has started.  The builder only
 authors USD and never starts Kit, opens assets, or configures the flight stack.
-All dimensions are metres; +Z is up and the clear flight aisle follows +X.
+All dimensions are metres; +Z is up. One imported STL heap sits at the centre.
 """
 
 from __future__ import annotations
 
 import math
-import random
+import hashlib
+from pathlib import Path
+import struct
+
+import numpy as np
+import yaml
 
 from pxr import Gf, Sdf, UsdGeom, UsdLux, UsdPhysics, UsdShade
 
@@ -66,83 +71,50 @@ def _disc(stage, path, center, radius, height, material, collision=False):
     return _finish(geom, material, collision)
 
 
-def _pile(stage, number, center, rx, ry, height, materials):
-    """Closed triangulated heap with bounded, irregular concentric contours.
-
-    Cone-like falloff gives an approximately 34--39 degree repose slope.
-    The top is slightly offset and every ring has angular perturbations, so
-    heaps retain a natural broken silhouette without texture dependencies.
-    """
-    rng = random.Random(20261023 + number * 97)
-    segments = 40
-    levels = (1.0, 0.83, 0.65, 0.47, 0.29, 0.12)
-    phase = rng.random() * math.tau
-    # One smooth radial outline shared by all levels avoids self-intersection.
-    outline = [
-        1.0 + 0.055 * math.sin(3 * math.tau * j / segments + phase)
-        + 0.035 * math.sin(7 * math.tau * j / segments - phase)
-        for j in range(segments)
-    ]
-    points = []
-    for ring, radius in enumerate(levels):
-        offset = 1.0 - radius
-        for j in range(segments):
-            angle = math.tau * j / segments
-            radial = radius * outline[j] * (1.0 + rng.uniform(-0.018, 0.018))
-            # No perturbation at the base: every boundary vertex meets ground.
-            z = height * (1.0 - radius)
-            if ring:
-                z += rng.uniform(-0.065, 0.065)
-            points.append(Gf.Vec3f(
-                rx * radial * math.cos(angle) + 0.33 * offset,
-                ry * radial * math.sin(angle) - 0.19 * offset,
-                max(0.0, z),
-            ))
-    top = len(points)
-    points.append(Gf.Vec3f(0.33, -0.19, height))
-    bottom = len(points)
-    points.append(Gf.Vec3f(0, 0, 0))
-    faces = []
-    for ring in range(len(levels) - 1):
-        for j in range(segments):
-            a = ring * segments + j
-            b = ring * segments + (j + 1) % segments
-            c = (ring + 1) * segments + (j + 1) % segments
-            d = (ring + 1) * segments + j
-            # Alternate diagonals so faceting does not create obvious spirals.
-            if (ring + j) % 2:
-                faces.extend(((a, b, d), (b, c, d)))
-            else:
-                faces.extend(((a, b, c), (a, c, d)))
-    for j in range(segments):
-        faces.append(((len(levels) - 1) * segments + j,
-                      (len(levels) - 1) * segments + (j + 1) % segments, top))
-        faces.append((bottom, (j + 1) % segments, j))
-
-    geom = UsdGeom.Mesh.Define(stage, f"{ROOT}/CoalPiles/Pile_{number:02d}")
-    geom.CreatePointsAttr(points)
-    geom.CreateFaceVertexCountsAttr([3] * len(faces))
-    geom.CreateFaceVertexIndicesAttr([index for face in faces for index in face])
+def _pile(stage, settings, material):
+    """Preserve the supplied binary STL triangles; centre XY and put its base on Z."""
+    source = Path(__file__).resolve().parent / settings["source"]
+    data = source.read_bytes()
+    if len(data) < 84:
+        raise ValueError(f"Invalid binary STL: {source}")
+    count = struct.unpack_from("<I", data, 80)[0]
+    if not count or len(data) != 84 + count * 50:
+        raise ValueError(f"Expected a complete binary STL: {source}")
+    records = np.frombuffer(data, offset=84, count=count, dtype=np.dtype([
+        ("normal", "<f4", (3,)), ("vertices", "<f4", (3, 3)), ("attribute", "<u2")]))
+    vertices = records["vertices"].reshape(-1, 3)
+    if not np.isfinite(vertices).all():
+        raise ValueError("STL contains non-finite coordinates")
+    points, indices = np.unique(vertices, axis=0, return_inverse=True)
+    source_min, source_max = points.min(axis=0), points.max(axis=0)
+    scale = float(settings["uniform_scale"])
+    if not np.isfinite(scale) or scale <= 0:
+        raise ValueError("coal_pile.uniform_scale must be positive")
+    shift = np.array([*(source_min[:2] + source_max[:2]) / 2, source_min[2]])
+    position = np.array([*settings["center_xy"], settings["base_z"]], dtype=float)
+    points = (points - shift) * scale + position
+    bounds = [points.min(axis=0).tolist(), points.max(axis=0).tolist()]
+    geom = UsdGeom.Mesh.Define(stage, f"{ROOT}/CoalPiles/Pile_01")
+    geom.CreatePointsAttr(points.tolist())
+    geom.CreateFaceVertexCountsAttr([3] * count)
+    geom.CreateFaceVertexIndicesAttr(indices.tolist())
     geom.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
-    geom.CreateDoubleSidedAttr(False)
-    geom.AddTranslateOp().Set(Gf.Vec3d(center[0], center[1], 0.0))
-    geom.CreateExtentAttr(UsdGeom.PointBased.ComputeExtent(points))
-    _finish(geom, materials[0], True)
+    # The source is an open surface, so show both sides without closing or
+    # simplifying the user's model. Ground remains the warehouse slab.
+    geom.CreateDoubleSidedAttr(True)
+    geom.CreateExtentAttr([Gf.Vec3f(*bounds[0]), Gf.Vec3f(*bounds[1])])
+    _finish(geom, material, True)
     UsdPhysics.MeshCollisionAPI.Apply(geom.GetPrim()).CreateApproximationAttr("none")
-    # Four subtly different rough coal materials vary by face without images.
-    # Family type "partition" means each triangle belongs to exactly one subset.
-    choices = [rng.choices(range(4), weights=(45, 30, 18, 7))[0] for _ in faces]
-    binding = UsdShade.MaterialBindingAPI(geom.GetPrim())
-    binding.SetMaterialBindSubsetsFamilyType(UsdGeom.Tokens.partition)
-    for index, material in enumerate(materials):
-        subset = binding.CreateMaterialBindSubset(
-            f"CoalTone{index}", [i for i, choice in enumerate(choices) if choice == index]
-        )
-        UsdShade.MaterialBindingAPI.Apply(subset.GetPrim()).Bind(material)
+    geom.GetPrim().SetCustomDataByKey("source_stl", settings["source"])
     return {
-        "path": str(geom.GetPath()), "center": [center[0], center[1], height / 2],
-        "base_radii": [rx, ry], "height": height,
-        "vertices": len(points), "triangles": len(faces),
+        "path": str(geom.GetPath()), "source": settings["source"],
+        "source_sha256": hashlib.sha256(data).hexdigest(),
+        "source_dimensions": (source_max - source_min).tolist(),
+        "uniform_scale": scale, "bounds": bounds,
+        "center": ((points.min(axis=0) + points.max(axis=0)) / 2).tolist(),
+        "dimensions": np.ptp(points, axis=0).tolist(),
+        "height": float(np.ptp(points[:, 2])),
+        "vertices": len(points), "triangles": count,
         "collision": "static triangle mesh",
     }
 
@@ -162,13 +134,16 @@ def _arrow(stage, name, x, y, material):
     _finish(geom, material)
 
 
-def build_scene(stage, include_roof=True):
+def build_scene(stage, include_roof=True, scene_config=None):
     """Build/replace /World/CoalWarehouse and return JSON-compatible metadata.
 
     Does not remove /World, create a PhysicsScene, add a drone, set time steps,
     save the stage or start the simulator. Caller owns these integration steps.
     include_roof=False omits only roof sheets; the steel structure remains.
     """
+    config = scene_config or yaml.safe_load(
+        (Path(__file__).resolve().parent / "config/coal_warehouse.yaml").read_text())
+    spawn = config["spawn"]
     UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
     UsdGeom.SetStageMetersPerUnit(stage, 1.0)
     if not stage.GetPrimAtPath("/World"):
@@ -178,7 +153,7 @@ def build_scene(stage, include_roof=True):
     if stage.GetPrimAtPath(ROOT):
         stage.RemovePrim(ROOT)
     root = UsdGeom.Xform.Define(stage, ROOT)
-    root.GetPrim().SetCustomDataByKey("description", "Open coal warehouse; local geometry; metres; Z-up")
+    root.GetPrim().SetCustomDataByKey("description", "Coal warehouse with one imported STL pile; metres; Z-up")
     for group in ("Materials", "Structure", "Roof", "CoalPiles", "Markings", "TakeoffPad", "Lights"):
         UsdGeom.Xform.Define(stage, f"{ROOT}/{group}")
 
@@ -191,25 +166,25 @@ def build_scene(stage, include_roof=True):
     white = _material(stage, "PadWhite", (0.9, 0.93, 0.93), 0.8)
     pad = _material(stage, "PadBlue", (0.055, 0.29, 0.39), 0.92)
     coal = [
-        _material(stage, f"Coal{i}", tuple(c * 0.22 for c in color), roughness=0.96 - i * 0.015)
+        _material(stage, f"Coal{i}", color, roughness=0.96 - i * 0.015)
         for i, color in enumerate(((0.034, 0.041, 0.047), (0.044, 0.051, 0.058),
                                    (0.052, 0.060, 0.068), (0.064, 0.071, 0.078)))
     ]
 
     # The base slab is the sole collision ground; painted patches avoid seams.
     _box(stage, "Ground", (0, 0, -0.18), (64, 44, 0.36), concrete)
-    _box(stage, "Markings/Aisle", (0, 0, 0.002), (50, 8.8, 0.004), aisle, False)
+    # Two clear side lanes replace the old aisle through the pile footprint.
     for side in (-1, 1):
-        _box(stage, f"Markings/LaneEdge_{'S' if side < 0 else 'N'}", (0, side * 4.4, 0.008),
-             (48, 0.12, 0.012), yellow, False)
-        _box(stage, f"Markings/OuterEdge_{'S' if side < 0 else 'N'}", (0, side * 15.8, 0.008),
+        suffix = "S" if side < 0 else "N"
+        _box(stage, f"Markings/Aisle_{suffix}", (0, side * 8.5, 0.002),
+             (44, 5.0, 0.004), aisle, False)
+        for edge in (6.0, 11.0):
+            _box(stage, f"Markings/LaneEdge_{suffix}_{int(edge)}", (0, side * edge, 0.008),
+                 (44, 0.10, 0.012), yellow, False)
+        _box(stage, f"Markings/OuterEdge_{suffix}", (0, side * 15.8, 0.008),
              (49, 0.10, 0.012), yellow, False)
-    for i, x in enumerate((-12, -4, 4, 12, 20)):
-        _arrow(stage, f"Direction_{i:02d}", x, 0, yellow)
-    for i, x in enumerate((-24, 24)):
-        for j in range(9):
-            _box(stage, f"Markings/Gate_{i}_{j}", (x, -4 + j, 0.008),
-                 (0.16, 0.5, 0.012), white, False)
+        for i, x in enumerate((-18, -10, 0, 10, 18)):
+            _arrow(stage, f"Direction_{suffix}_{i:02d}", x, side * 8.5, yellow)
 
     # Open sides and two full-width end openings; posts are outside flight lanes.
     for bay, x in enumerate((-24, -12, 0, 12, 24)):
@@ -237,22 +212,16 @@ def build_scene(stage, include_roof=True):
             _box(stage, f"Roof/Sheet_{suffix}", (0, side * 11.5, 8.32),
                  (48.6, 7.2, 0.055), roof, True, -side * math.degrees(math.atan(0.08)))
 
-    piles = []
-    for row, y in enumerate((-9.9, 9.9)):
-        for col, x in enumerate((-16, -5.3, 5.3, 16)):
-            number = row * 4 + col + 1
-            radius_x = (4.1, 4.4, 4.2, 4.35)[col]
-            radius_y = (3.9, 4.05, 3.8, 4.0)[(col + row) % 4]
-            height = (3.2, 3.55, 3.35, 3.4)[(col + row) % 4]
-            piles.append(_pile(stage, number, (x, y), radius_x, radius_y, height, coal))
+    piles = [_pile(stage, config["coal_pile"], coal[0])]
 
-    # Paint lies on the same physical slab, so landing has no mesh seam.
-    _disc(stage, "TakeoffPad/OuterRing", (-19, 0, 0.010), 1.8, 0.006, white)
-    _disc(stage, "TakeoffPad/BlueCircle", (-19, 0, 0.014), 1.64, 0.006, pad)
+    # Paint shares the physical slab and marks the configured spawn position.
+    px, py = spawn[:2]
+    _disc(stage, "TakeoffPad/OuterRing", (px, py, 0.010), 1.8, 0.006, white)
+    _disc(stage, "TakeoffPad/BlueCircle", (px, py, 0.014), 1.64, 0.006, pad)
     for name, position, size in (
-        ("HLeft", (-19.45, 0, 0.020), (0.16, 1.35, 0.006)),
-        ("HRight", (-18.55, 0, 0.020), (0.16, 1.35, 0.006)),
-        ("HCross", (-19, 0, 0.020), (0.9, 0.16, 0.006)),
+        ("HLeft", (px - .45, py, 0.020), (0.16, 1.35, 0.006)),
+        ("HRight", (px + .45, py, 0.020), (0.16, 1.35, 0.006)),
+        ("HCross", (px, py, 0.020), (0.9, 0.16, 0.006)),
     ):
         _box(stage, f"TakeoffPad/{name}", position, size, white, False)
 
@@ -270,15 +239,17 @@ def build_scene(stage, include_roof=True):
         "units": "metres", "up_axis": "Z",
         "warehouse_dimensions": [48.0, 30.0, 9.2],
         "slab_bounds": [[-32, -22, -0.36], [32, 22, 0]],
-        "start_position": [-19.0, 0.0, 1.5],
-        "start_yaw_degrees": 0.0,
-        "clear_main_aisle": {"x": [-24, 24], "y": [-4.4, 4.4], "height": 7.7},
+        "start_position": list(spawn),
+        "start_yaw_degrees": config.get("spawn_yaw_degrees", 0.0),
+        "clear_side_aisles": [
+            {"x": [-22, 22], "y": [-11, -6], "height": 7.7},
+            {"x": [-22, 22], "y": [6, 11], "height": 7.7}],
         "suggested_flight_bounds": [[-25, -13.5, 0.35], [25, 13.5, 6.5]],
-        "takeoff_pad_center": [-19.0, 0.0, 0.0],
+        "takeoff_pad_center": [spawn[0], spawn[1], 0.0],
         "pile_count": len(piles), "piles": piles,
         "pile_triangles": sum(pile["triangles"] for pile in piles),
         "roof_path": f"{ROOT}/Roof", "roof_included": bool(include_roof),
-        "external_assets": [],
-        "recommended_camera_eye": [-34.0, -32.0, 19.0],
-        "recommended_camera_target": [1.0, 0.0, 1.6],
+        "source_assets": [config["coal_pile"]["source"]],
+        "recommended_camera_eye": config["overview_eye"],
+        "recommended_camera_target": config["overview_target"],
     }

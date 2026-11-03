@@ -1,6 +1,9 @@
 # 补丁文件必须保持 LF：仓库根是 * text=auto，checkout 时会把 .patch 转成 CRLF，
 # 导致 patch 上下文与 Pegasus 源码（LF）失配、git apply 失败。
-docs/*.patch -text
+patches/*.patch -text
 
-# Windows 批处理按 CRLF 检出
-*.bat text eol=crlf
+*.sh text eol=lf
+*.stl binary
+
+# Preserve upstream formatting in vendored sources.
+third_party/** -whitespace

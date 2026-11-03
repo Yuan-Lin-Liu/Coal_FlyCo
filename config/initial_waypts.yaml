@@ -1,0 +1,6 @@
+# World ENU metres; [x, y, z, gimbal pitch degrees, body yaw degrees].
+# Rise vertically above the spawn to 2 m, then hover facing +X.
+# Keep X/Y fixed; no lateral survey segment or camera/body rotation.
+path:
+  - waypoints:
+    - [-14.0, 0.0, 2.0, 0.0, 0.0]

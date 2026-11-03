@@ -1,0 +1,738 @@
+# FlyCo visualization adapted to Isaac world ENU and warehouse scale.
+Panels:
+- Class: rviz_common/Displays
+  Name: Displays
+  Property Tree Widget:
+    Expanded:
+    - /Global Options1
+    - /Vehicle and trajectories1
+    - /Isaac sensors1
+    Splitter Ratio: 0.52
+  Tree Height: 550
+- Class: rviz_common/Views
+  Name: Views
+- Class: rviz_common/Time
+  Name: Time
+  SyncMode: 0
+  SyncSource: FPV
+Preferences:
+  PromptSaveOnExit: false
+Visualization Manager:
+  Class: ''
+  Displays:
+  - Alpha: 0.5
+    Cell Size: 1
+    Class: rviz_default_plugins/Grid
+    Color: 80; 85; 95
+    Enabled: true
+    Line Style:
+      Line Width: 0.029999999329447746
+      Value: Lines
+    Name: Grid
+    Normal Cell Count: 0
+    Offset:
+      X: 0
+      Y: 0
+      Z: 0
+    Plane: XY
+    Plane Cell Count: 64
+    Reference Frame: <Fixed Frame>
+    Value: true
+  - Alpha: 1
+    Class: rviz_default_plugins/Axes
+    Enabled: true
+    Length: 2
+    Name: Axes
+    Radius: 0.03
+    Reference Frame: world
+    Show Trail: false
+    Value: true
+  - Class: rviz_common/Group
+    Name: Vehicle and trajectories
+    Enabled: true
+    Displays:
+    - Angle Tolerance: 0.10000000149011612
+      Class: rviz_default_plugins/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: false
+      Enabled: true
+      Keep: 1
+      Name: Actual vehicle pose
+      Position Tolerance: 0.10000000149011612
+      Shape:
+        Alpha: 1
+        Axes Length: 1
+        Axes Radius: 0.10000000149011612
+        Color: 255; 180; 30
+        Head Length: 0.25
+        Head Radius: 0.12
+        Shaft Length: 0.7
+        Shaft Radius: 0.05
+        Value: Arrow
+      Value: true
+      Topic:
+        Value: /isaac/odom
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 10
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 25; 255; 0
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.045
+      Name: Actual trajectory
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Value: true
+      Topic:
+        Value: /traj_server/odom_traj
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        Filter size: 10
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 0; 0; 255
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.045
+      Name: Commanded trajectory
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Value: true
+      Topic:
+        Value: /traj_server/exec_traj
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        Filter size: 10
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Camera field of view
+      Namespaces: {}
+      Value: true
+      Topic:
+        Value: /traj_server/fov_vis
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Class: rviz_default_plugins/Marker
+      Enabled: false
+      Name: Commanded vehicle model
+      Namespaces: {}
+      Value: false
+      Topic:
+        Value: /traj_server/robot_vis
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Class: rviz_default_plugins/Marker
+      Enabled: false
+      Name: planned_pos_traj
+      Namespaces: {}
+      Value: false
+      Topic:
+        Value: /traj_server/planned_pos_traj
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: planned_ori_traj
+      Namespaces: {}
+      Value: false
+      Topic:
+        Value: /traj_server/planned_ori_traj
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+  - Class: rviz_common/Group
+    Name: Isaac sensors
+    Enabled: true
+    Displays:
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 24.79969024658203
+        Min Value: -2.2540946006774902
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 220; 220; 220
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: World LiDAR
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.04
+      Style: Points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+      Topic:
+        Value: /isaac/lidar/world
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Filter size: 10
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: FPV
+      Normalize Range: true
+      Value: true
+      Topic:
+        Value: /isaac/camera/rgb
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+    - Class: rviz_default_plugins/Image
+      Enabled: false
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Depth
+      Normalize Range: true
+      Value: false
+      Topic:
+        Value: /isaac/camera/depth
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 24.79969024658203
+        Min Value: -2.2540946006774902
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 220; 220; 220
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: RGB-D point cloud
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.04
+      Style: Points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+      Topic:
+        Value: /isaac/camera/world_points
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Filter size: 10
+  - Class: rviz_common/Group
+    Name: Target perception
+    Enabled: true
+    Displays:
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 24.79969024658203
+        Min Value: -2.2540946006774902
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 100; 50
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Segmented target
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.04
+      Style: Points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+      Topic:
+        Value: /tracking/target_pc
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Filter size: 10
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 24.79969024658203
+        Min Value: -2.2540946006774902
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 210; 50
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Observed target surface
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.04
+      Style: Points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+      Topic:
+        Value: /mesh_pred/partial_pc
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Filter size: 10
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 24.79969024658203
+        Min Value: -2.2540946006774902
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 220; 220; 220
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Environment
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.04
+      Style: Points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+      Topic:
+        Value: /tracking/env_pc
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Filter size: 10
+    - Class: rviz_default_plugins/Image
+      Enabled: false
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Target mask
+      Normalize Range: true
+      Value: false
+      Topic:
+        Value: /tracking/mask/image
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+  - Class: rviz_common/Group
+    Name: Prediction
+    Enabled: true
+    Displays:
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Current predicted mesh
+      Namespaces: {}
+      Value: true
+      Topic:
+        Value: /prediction/mesh_vis
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Class: rviz_default_plugins/Marker
+      Enabled: false
+      Name: Mesh used by planner
+      Namespaces: {}
+      Value: false
+      Topic:
+        Value: /prediction/mesh
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 24.79969024658203
+        Min Value: -2.2540946006774902
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 60; 170; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Predicted surface points
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.04
+      Style: Points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+      Topic:
+        Value: /mesh_pred/pred_pc
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Filter size: 10
+  - Class: rviz_common/Group
+    Name: Mapping
+    Enabled: true
+    Displays:
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 16.274999618530273
+        Min Value: -0.9750000238418579
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 116; 116; 116
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 0; 0; 0
+      Min Color: 0; 0; 0
+      Name: Occupied voxels
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 15
+      Size (m): 0.10000000149011612
+      Style: Boxes
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+      Topic:
+        Value: /sdf_map/occupancy_all
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Filter size: 10
+    - Alpha: 0.10000000149011612
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 110; 110; 110
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Inflated obstacles
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.30000001192092896
+      Style: Boxes
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+      Topic:
+        Value: /sdf_map/occupancy_all_inflate
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Filter size: 10
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: mapping_range
+      Namespaces: {}
+      Value: false
+      Topic:
+        Value: /sdf_map/mapping_range
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+  - Class: rviz_common/Group
+    Name: Coverage planning
+    Enabled: true
+    Displays:
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Global coverage order
+      Namespaces: {}
+      Value: true
+      Topic:
+        Value: /hcopp/decomp_global_path
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Class: rviz_default_plugins/Marker
+      Enabled: false
+      Name: Global coverage path
+      Namespaces: {}
+      Value: false
+      Topic:
+        Value: /hcopp/HCOPP_Path
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: Candidate viewpoints
+      Namespaces: {}
+      Value: false
+      Topic:
+        Value: /hcopp/valid_vp
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: local_viewpoints
+      Namespaces: {}
+      Value: false
+      Topic:
+        Value: /local_planning/vp_local
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: local_updated_path
+      Namespaces: {}
+      Value: false
+      Topic:
+        Value: /local_planning/local_updated_tour
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Applied trajectory
+      Namespaces: {}
+      Value: true
+      Topic:
+        Value: /hcoppTraj/applied_trajectory
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Class: rviz_default_plugins/Marker
+      Enabled: false
+      Name: traj_waypoints
+      Namespaces: {}
+      Value: false
+      Topic:
+        Value: /hcoppTraj/waypoints
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Filter size: 100
+    - Alpha: 0.699999988079071
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 30.675079345703125
+        Min Value: 3.146780490875244
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 0; 0
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Uncovered surface
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 17
+      Size (m): 0.30000001192092896
+      Style: Flat Squares
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+      Topic:
+        Value: /hcopp/uncovered_area
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Filter size: 10
+  - Class: rviz_common/Group
+    Name: Reconstruction
+    Enabled: true
+    Displays:
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Accumulated RGB map
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+      Topic:
+        Value: /rgb_mapping/rgb_map
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        Filter size: 1
+  Enabled: true
+  Name: root
+  Value: true
+  Global Options:
+    Background Color: 28; 32; 40
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 20
+  Tools:
+  - Class: rviz_default_plugins/Interact
+  - Class: rviz_default_plugins/MoveCamera
+  - Class: rviz_default_plugins/Select
+  - Class: rviz_default_plugins/FocusCamera
+  - Class: rviz_default_plugins/Measure
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Distance: 55.0
+      Focal Point:
+        X: 0.0
+        Y: 0.0
+        Z: 2.0
+      Pitch: 0.8
+      Yaw: 0.9
+      Target Frame: <Fixed Frame>
+      Near Clip Distance: 0.05
+    Saved: []
+Window Geometry:
+  Width: 1280
+  Height: 850
+  X: 80
+  Y: 80
+  Hide Left Dock: false
+  Hide Right Dock: true
+  QMainWindow State: 000000ff00000000fd00000003000000000000012200000310fc0200000001fc00000000000003100000002c00fffffffa000000000200000002fb000000100044006900730070006c0061007900730100000000ffffffff0000002c00fffffffb0000000a005600690065007700730000000000ffffffff0000002c00ffffff000000010000014000000310fc0200000001fb000000060046005000560100000000000003100000002c00ffffff00000003000005000000003cfc0100000001fb0000000800540069006d00650100000000000005000000003e00ffffff000002920000031000000004000000040000000800000008fc00000000

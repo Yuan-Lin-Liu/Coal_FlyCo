@@ -1,170 +1,120 @@
-# 煤堆仓库 + 四旋翼无人机仿真（Isaac Sim 5.1 + Pegasus）
+# Coal_FlyCo：Isaac Sim + FlyCo 煤仓无人机仿真
 
-在 Isaac Sim 5.1 中程序化生成一个 48 × 30 m 的开放式煤堆仓库（8 个静态碰撞煤堆、钢结构、可隐藏屋顶），用 Pegasus Simulator 的 Iris 四旋翼做键盘手动飞行。飞控是自研的 Python 位置保持后端，**不依赖 ROS 2、DDS、PX4、ArduPilot 或 QGroundControl**。
+Isaac Sim 5.1 / Pegasus 提供无人机物理、RGB-D 相机和激光雷达；FlyCo 负责目标分割、网格预测、覆盖规划与位置控制。仿真使用 Isaac 状态作为定位输入，当前未接入 Super-LIO 或 PX4 固件。
 
-## 环境要求
+## 新机器安装（Docker）
 
-| 项目 | 要求 |
-|---|---|
-| 系统 | Windows 10/11 x64 |
-| 显卡 | NVIDIA RTX，显存 ≥ 8 GB（8 GB 笔记本显卡可用 960×540 + DLSS 实时跑） |
-| 驱动 | 支持 RTX 50 系的新驱动（592.82 验证通过） |
-| 仿真器 | **Isaac Sim 5.1.0**（Windows 版；5.0 / 4.5 的 API 不兼容） |
-| 扩展 | **Pegasus Simulator v5.1.0**（必须是配 Isaac 5.1 的版本） |
-| Python | Isaac Sim 自带的 Kit Python 3.11，**不要用 conda / 系统 Python** |
-| 依赖包 | `pymavlink`（安装 Pegasus 时自动装）；numpy / scipy 由 Isaac Sim 自带 |
-| 不需要 | ROS 2、DDS、PX4、ArduPilot、QGroundControl |
+源码、两个煤堆 STL 和两个 USD 场景保存在此仓库；Isaac、ROS、Python 环境和模型权重由安装脚本获取，不进入 Git。发布者已确认取得当前 FlyCo ROS2 修改版的公开发布授权；第三方来源和原始条款见 [THIRD_PARTY.md](THIRD_PARTY.md)。
 
-## 快速开始
+宿主机需要 Linux x86_64、兼容的 NVIDIA RTX 显卡及驱动、Docker Engine、NVIDIA Container Toolkit、`python3-yaml`、`curl`。本机验证配置为 RTX 3090 / 驱动 580.178.04。首次安装包含数十 GB 的下载与构建，请预留至少 100 GB；缓存、权重、构建结果保留在本地。
 
-完整步骤（含每步验证方式与排错）见 [docs/安装与交接说明.md](docs/安装与交接说明.md)。
-
-1. 克隆到 Isaac Sim 目录下，**必须与 `PegasusSimulator` 同级**：
-   ```bat
-   git clone https://github.com/lf1847755-hub/coal_warehouse-and-quadrotor.git "%ISAACSIM%\coal_warehouse"
-   ```
-2. 安装 Isaac Sim 5.1.0，把 Pegasus Simulator 5.1.0 放到 `%ISAACSIM%\PegasusSimulator`。
-3. 在 `%ISAACSIM%\apps\isaacsim.exp.base.kit` 的 `[dependencies]` 首行加一行：
-   ```toml
-   "isaacsim.replicator.agent.core" = {}
-   ```
-4. 把 Pegasus 装进 Kit Python（editable 安装）：
-   ```bat
-   "%ISAACSIM%\python.bat" -m pip install -e "%ISAACSIM%\PegasusSimulator\extensions\pegasus.simulator"
-   ```
-5. 打 Windows 兼容补丁（两处：ROS 后端开关、跳过联网资产检查）：
-   ```bat
-   docs\apply-pegasus-patch.bat "%ISAACSIM%\PegasusSimulator\extensions\pegasus.simulator"
-   ```
-6. 打开 `launch_warehouse.bat`，把 `set ISAACSIM_PATH=E:\isaacsim` 改成本机实际路径。
-7. 双击 `launch_warehouse.bat`（可自行建桌面快捷方式，目标指向它、工作目录设为本目录）。首次加载约 1–3 分钟。
-
-## 目录结构
-
-`coal_warehouse.usda` 用相对路径引用 Pegasus 的 Iris 资产，所以两个目录必须是兄弟：
-
-```
-%ISAACSIM%\
-├─ apps\isaacsim.exp.base.kit
-├─ PegasusSimulator\extensions\pegasus.simulator\...
-└─ coal_warehouse\            ← 本仓库
-   └─ coal_warehouse.usda     →  @../PegasusSimulator/extensions/.../Iris/iris.usd@
+```bash
+git clone git@github.com:Yuan-Lin-Liu/Coal_FlyCo.git
+cd Coal_FlyCo
+# 如缺少宿主机 Python YAML 包：sudo apt install python3-yaml
+# 阅读 NVIDIA Isaac Sim EULA 后设置 ACCEPT_EULA=Y。
+ACCEPT_EULA=Y ./docker/setup.sh
+ACCEPT_EULA=Y ./docker/run.sh --scene 4
+# 切换场景：先停止当前会话，再启动
+ACCEPT_EULA=Y ./docker/run.sh --scene 6
 ```
 
-换盘符可以，改变层级会让无人机资产丢失。
+`docker/setup.sh` 构建两个本地镜像：Isaac Sim 5.1 + Pegasus，以及 ROS2 Humble + FlyCo。运行时通过宿主机网络上的 TCP 端口通信，共享本次会话目录；源码以只读方式挂载，权重以只读方式挂载，日志和缓存单独持久化。宿主机不需要安装 ROS 或完整 CUDA Toolkit。
 
-## 场景保存与加载
+默认显示 Isaac、FlyCo-UI、RViz，需可用的本地 X11/XWayland 显示和 Xauthority。使用 `--headless` 运行无窗口仿真。原有终端管理命令继续可用，例如 `python3 launch.py status`、`python3 launch.py action land`、`python3 launch.py stop`。结束管理器会停止其创建的两个容器。
 
-正常启动会读取本目录的 `coal_warehouse.usda`，不再重新生成或覆盖你的场景。只有场景文件不存在时才生成初始仓库。启动时会重新添加无人机，并让它回到起飞坪。
-
-编辑流程：
-
-1. 点击右侧 **Stop / Edit**（或 Isaac Sim 左侧 Stop），确认状态为 STOPPED。
-2. 在 Stage / Property 面板中调整煤堆位置、大小、材质，或添加物体。
-3. 点击右侧 **Save scene + backup**。看到 Scene saved 才表示保存成功。
-4. 点击 **Play / Resume** 重新试飞；关闭后下次启动会读取这次保存的修改。
-
-每次保存都会在 `backups` 文件夹保留上一个版本，文件名含时间戳，保存失败不会覆盖原文件。
-暂停 PAUSED 不等于停止：保存按钮只在 STOPPED 时可用，避免把飞行中的物理状态保存成场景。
-请使用右侧保存按钮保存到本项目；Isaac 的 File / Save As 可以另存副本，但副本不会自动成为下次启动的场景。
-关闭前请主动保存，未点击保存的修改不会自动写入项目文件。
-
-**Restore default warehouse...** 是独立的恢复默认操作：仅在停止状态可用，确认后先保存当前编辑并备份，再恢复最初的 8 个煤堆与仓库。`/World/CoalWarehouse` 外自行添加的对象会保留。
-需要恢复备份时，先关闭程序，保留当前文件副本，再把选中的 backups 文件复制到本目录并命名为 `coal_warehouse.usda`。
-
-## 播放、暂停、停止、重置
-
-- **Play / Resume**：暂停后从原位置继续；停止后重新初始化无人机，可以再次起飞。
-- **Pause**：冻结当前飞行位置，恢复播放后继续，不会把空中无人机重置到起点。
-- **Stop / Edit**：停止并关闭键盘飞控，持续保持停止，方便编辑场景。
-- **Reset drone [R]**：无人机回到起飞坪，仓库修改保留；原来在播放、暂停或停止，重置后仍保持该状态。
-
-Isaac Sim 左侧原生播放、暂停和停止按钮也支持这些流程。
-
-## 键盘飞行
-
-切换英文输入法，点击右侧 **Enable flight keyboard**，再点击三维视口内部。
-等面板显示 **KEYBOARD ACTIVE** 后操作。第一次启动和停止后，键盘飞控默认关闭。
-点击 Stage / Property / 搜索框或切换到其他程序时，飞行键会失效并清除移动指令；回到视口后先松开所有飞行键，再重新按下。
-Ctrl、Alt、Shift 等组合键不会作为飞行指令。
-
-| 按键 | 功能 |
-|---|---|
-| T | 起飞到 2 米 |
-| W / S | 按无人机朝向前进 / 后退 |
-| A / D | 左右平移 |
-| Q / E | 左右转向 |
-| ↑ / ↓ | 上升 / 下降 |
-| H | 设定当前位置为悬停目标 |
-| L | 自动缓慢降落，着地后停桨 |
-| R | 重置到起飞坪 |
-| F / O | 跟随视角 / 仓库总览 |
-| V | 隐藏或显示屋顶；碰撞仍保留 |
-
-松开移动按键会减速并悬停。速度上限 1.5 米/秒，高度上限 6.5 米。
-撞击后若出现 FAULT，使用 Reset drone。暂停或停止时请使用面板按钮，飞行快捷键不会响应。
-起飞、悬停和降落按钮不要求开启键盘飞控，但要求仿真正在播放。
-关闭 Isaac Sim 窗口即可退出。不要在飞行中修改无人机的 Stage 变换。
-
-## 验收演示顺序
-
-1. 点击 Overview 展示开放仓库、8 个煤堆、钢结构和中央通道。
-2. 点击 Follow，启用键盘并聚焦三维视口，按 T 起飞。
-3. 按 W 沿通道前进；使用 A/D 和 Q/E 展示平移和转向。
-4. 在煤堆间隙穿梭，松开按键展示悬停。
-5. 返回空旷地面，按 L 降落。
-
-## 文件说明
-
-| 文件 | 作用 |
-|---|---|
-| `warehouse_app.py` | 启动、场景加载、飞行验收入口 |
-| `flight_ui.py` | 控制面板、焦点保护、播放/暂停/停止/重置、保存操作 |
-| `scene_storage.py` | 只读加载、原子保存和备份；保存环境，不保存运行中的无人机 |
-| `manual_backend.py` | Pegasus 辅助飞控，输出旋翼转速 |
-| `scene_builder.py` | 仓库、煤堆、材质、碰撞的参数化建模 |
-| `coal_warehouse.usda` | 编辑后的仓库环境。单独打开只加载场景；手动飞控需使用启动脚本 |
-| `scene_metadata.json` | 初始设计参数。编辑后的几何以 USD 为准 |
-| `logs/runtime_metadata.json` | 本次启动的仿真与无人机参数 |
-| `logs/acceptance_result.json` | 程序化飞行和碰撞体射线检查结果 |
-| `logs/workflow_result.json` | 保存、加载、备份、时间线与输入门禁回归检查结果 |
-| `docs/` | 安装与交接说明、Pegasus 补丁、打补丁脚本 |
-| `backups/` | 显式保存前的场景备份（运行后生成） |
-
-## 命令行参数
-
-```bat
-REM 无界面自检（飞行 + 碰撞体检查）
-"%ISAACSIM%\python.bat" warehouse_app.py --self-test
-
-REM 保存 / 加载 / 备份 / 输入门禁回归
-"%ISAACSIM%\python.bat" warehouse_app.py --workflow-test
-
-REM 空场景（只放地面 + 无人机）
-"%ISAACSIM%\python.bat" warehouse_app.py --empty
-
-REM 指定其他 USD 场景
-"%ISAACSIM%\python.bat" warehouse_app.py --scene D:\path\to\scene.usda
+```bash
+./docker/setup.sh --check          # 检查镜像、权重及固定版本缓存
+ACCEPT_EULA=Y ./docker/setup.sh --rebuild # 修改源码后重建；保留下载的模型
+ACCEPT_EULA=Y ./docker/run.sh --scene 6 --headless
 ```
 
-## 常见问题
+资源下载可中断重试，已通过校验的文件会复用。Google Drive 限流时，可把原始 `checkpoint.pt` 放入 `.local/flyco/models/mesh/` 后重试，或用 `MESH_CHECKPOINT_URL` 指定同一文件的镜像地址。文件仍必须匹配 `config/models.json` 的 SHA256。Hugging Face 模型固定到该清单中的提交版本。镜像构建会根据本机 GPU 编译 CUDA 扩展；可通过 `TORCH_CUDA_ARCH_LIST` 覆盖目标架构，当前 CUDA 11.8 / Torch 2.3.1 组合主要面向已验证的 Ampere 显卡。
 
-- **必须用 `python.bat` 启动**：它才会把 Isaac 的 `site-packages`、`exts` 与 DLL 目录加进环境；用系统 Python 会报找不到 `isaacsim` / `pxr`。
-- **`import pegasus` 失败**：Pegasus 没按第 4 步装进 Kit Python，或版本不是 5.1.0。
-- **启动日志出现 `ROS2 package not installed. ROS2Backend will not be available`**：正常现象，补丁故意禁用了 ROS 后端，本示例不需要 ROS 2。
-- **场景里没有无人机 / 资产丢失**：`coal_warehouse` 与 `PegasusSimulator` 不在同一层级，或 Pegasus 被移动过。
-- **显存不足 / 掉帧**：调低 `warehouse_app.py` 里的 `width` / `height`，或把 `--/rtx/post/dlss/execMode` 改为更偏性能的档位。
-- **想接 ROS 2**：去掉 `PEGASUS_DISABLE_ROS2=1`，并在 Isaac Sim 里启用 `isaacsim.ros2.bridge` 扩展；与本项目当前默认配置互不冲突。
+NVIDIA 官方容器和安装要求：[Isaac Sim 5.1](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/install_container.html)、[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)。
 
-## 已配置范围与限制
+## 本机原生启动与场景选择
 
-Isaac Sim 5.1.0 + 官方 Pegasus Simulator v5.1.0 + Iris 无人机。飞行使用 Pegasus 旋翼推力与 PhysX 动力学、自定义 Python 位置保持控制器。
-当前模式不需要 PX4、QGroundControl 或 ROS 2；如果要做软件在环或接真实遥控器，需要另行集成。
-针对 RTX 5060 Laptop 8 GB / 16 GB 内存采用实时渲染、DLSS 性能档、960×540 渲染分辨率、CPU 120Hz 物理和单无人机；默认煤堆共 3840 个三角形。
-Pegasus 官方未测试 Windows，本仓库保留两处兼容调整：跳过本地场景不需要的远程资产根目录检查、用 `PEGASUS_DISABLE_ROS2=1` 跳过 ROS 后端。两处改动见 [docs/pegasus-5.1.0-local-changes.patch](docs/pegasus-5.1.0-local-changes.patch)。
-仓库默认 48×30 米，煤堆为静态碰撞网格，不模拟煤粒散落。正常飞行通过推力实现，重置会把无人机恢复至起点。
+```bash
+# 二选一；不加参数默认使用场景 4
+./launch_warehouse.sh --scene 4
+./launch_warehouse.sh --scene 6
+```
 
-## 参考
+| 场景 | 煤堆模型 | 尺寸（米） | USD |
+|---|---|---|---|
+| `4` | `assets/coal_piles/coal_pile_final.stl` | 12×6×5 | `coal_warehouse.usda` |
+| `6` | `assets/coal_piles/coal_pile_solid.stl` | 约 10.61×5.34×5 | `scenes/coal_warehouse_6.usda` |
 
-- Pegasus Simulator 文档：<https://pegasussimulator.github.io/PegasusSimulator/>
-- Isaac Sim 5.1 文档：<https://docs.isaacsim.omniverse.nvidia.com/>
+每个场景只有一个煤堆，底面中心为 `(0, 0, 0)`。两个 STL 均等比例放大 2 倍，显示、碰撞与雷达采用同一模型。`--pile` 与 `--scene` 等效；切换前先结束当前会话。
+
+默认打开 Isaac、FlyCo-UI 和 RViz2。可使用 `--no-rviz` 关闭自动 RViz，或使用 `--headless` 无窗口运行。`ISAACSIM_PATH` 可指定其他 Isaac 安装。
+
+## 操作
+
+1. 等待算法启动，点 **1 Initialize**，等待起点初始化完成。
+2. 点 **2 Initial flight**，原地垂直起飞至航点高度后悬停；当前设置为 2 m。
+3. 在 **FlyCo-UI** 点选煤堆并发送点提示，或点击 **send text** 发送文字提示。
+4. 等待目标点云和预测网格出现，再点 **3 Enable planning**。
+5. 点 **4 Autonomous scan** 开始扫描。
+6. 点 **Land** 降落，确认 `GROUNDED` 且旋翼停止。
+
+**Hold** 保持当前位置，**Resume** 恢复 FlyCo 控制。面板的 `RECEIVED` 表示收到操作，实际执行情况以模式、位置和运动为准。
+
+```bash
+python3 launch.py status         # 当前会话和飞行状态
+python3 launch.py stop           # 结束当前会话
+python3 launch.py logs           # 关键日志，重复信息只显示一次
+python3 launch.py logs --verbose # 完整输出；Ctrl+C 只退出查看
+python3 launch.py rviz           # 单独打开当前会话的 RViz
+python3 launch.py start --scene 6 # 后台启动
+python3 launch.py action land    # 终端执行面板操作
+```
+
+`action` 还支持 `initialize`、`initial`、`plan`、`scan`、`hold`、`resume`、`disarm`。默认 ROS 域为 64、TCP 端口为 8870，可通过 `--domain`、`--port` 修改。同一项目同时运行一个会话。
+
+## 配置
+
+| 文件 | 用途 |
+|---|---|
+| `config/coal_warehouse.yaml` | 公共传感器、出生点、煤堆尺寸、总览视角及 UI 默认文字 |
+| `config/scenes.yaml` | 场景 4/6 的 USD、模型和配置覆盖项 |
+| `config/initial_waypts.yaml` | 初始化航点，格式 `[x, y, z, 云台俯仰角, 机体航向角]` |
+| `config/coal_warehouse.rviz` | RViz 图层和视角 |
+| `third_party/flyco_ros2/config/flyco.yaml` | FlyCo 算法参数 |
+
+位置单位为米，世界 Z 轴向上，航点角度为度。出生点当前为 `(-14, 0, 0.15)`，朝向 +X。修改起飞高度时只需改航点第三个数值，保持 X/Y 与出生点一致。
+
+UI 默认文字通过以下参数预填，仍需点击 **send text** 发送：
+
+```yaml
+initial_text_prompt: "A single large, irregular pile of black coal on the warehouse floor."
+```
+
+配置在启动时读取；运行目录内保存本次实际使用的配置与航点快照。修改模型、缩放、煤堆位置或起降台位置后，重新生成对应场景，再重启仿真：
+
+```bash
+./isaac_python.sh tools/rebuild_scene.py --scene 4
+./isaac_python.sh tools/rebuild_scene.py --scene 6
+# 同时生成两个场景使用 --scene all
+```
+
+## 源码与依赖
+
+| 位置 | 内容 |
+|---|---|
+| `sim/` | Isaac、Pegasus、传感器和旋翼物理适配 |
+| `bridge/` | ROS 接口、FlyCo 启动与终端日志 |
+| `third_party/flyco_ros2/` | 当前使用的 FlyCo 感知、规划、控制源码 |
+| `third_party/ros_interfaces/` | 自定义 ROS 消息与服务 |
+| `third_party/EVF-SAM/` | 文字目标初始化模型代码 |
+| `.local/flyco/` | Python 环境、CUDA/OMPL、权重、模型缓存及构建结果 |
+| `.local/isaacsim/`、`.local/PegasusSimulator/` | 本机仿真环境 |
+
+原生模式不依赖其他 FlyCo 工程目录，但需要已有本地 Isaac / Pegasus、ROS2 Humble、Python 环境、CUDA/OMPL 和模型权重。`tools/setup_flyco.sh` 用于重新编译已有环境；新机器请优先使用上面的 Docker 安装入口。大型环境和权重不随 Git 上传。原生环境入口为 `tools/flyco_env.sh`：
+
+```bash
+./tools/setup_flyco.sh
+```
+
+Pegasus 5.1 的本地适配补丁位于 `patches/`，使用 `tools/apply_pegasus_patch.sh` 应用。第三方源码的许可证与版权声明保留；FlyCo 的使用限制见 `LICENSE.FlyCo`。

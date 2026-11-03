@@ -1,0 +1,38 @@
+{
+  "files": [
+    {
+      "path": "sam2/sam2_hiera_small.pt",
+      "sha256": "95949964d4e548409021d47b22712d5f1abf2564cc0c3c765ba599a24ac7dce3",
+      "url": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_small.pt"
+    },
+    {
+      "path": "mesh/checkpoint.pt",
+      "sha256": "2918f477e651eb8d5cead60ce92f17f8de8889958a45ebaa20543dfac99a3677",
+      "url": "https://drive.usercontent.google.com/download?id=1nCyX6wP0Ni7W1TAi_lJ2k__bSu8FviNo&export=download&confirm=t"
+    },
+    {
+      "path": "mesh/snet-n3k-wonormal.pth",
+      "sha256": "3a6454d9bbd5111fbac04bb83f966e1597782f9ec72bad889925b992e07bdb6f",
+      "url": "https://huggingface.co/heiwang1997/nksr-checkpoints/resolve/main/checkpoints/snet-n3k-wonormal.pth"
+    },
+    {
+      "path": "torch/hub/checkpoints/resnet18-f37072fd.pth",
+      "sha256": "f37072fd47e89c5e827621c5baffa7500819f7896bbacec160b1a16c560e07ec",
+      "url": "https://download.pytorch.org/models/resnet18-f37072fd.pth"
+    }
+  ],
+  "huggingface": [
+    {
+      "repo": "facebook/dinov2-base",
+      "revision": "f9e44c814b77203eaa57a6bdbbd535f21ede1415"
+    },
+    {
+      "repo": "google/siglip-base-patch16-224",
+      "revision": "7fd15f0689c79d79e38b1c2e2e2370a7bf2761ed"
+    },
+    {
+      "repo": "YxZhang/evf-sam2",
+      "revision": "ca262a5ccf95aca1f0ecb6148804781262af9937"
+    }
+  ]
+}

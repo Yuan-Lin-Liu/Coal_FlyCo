@@ -1,0 +1,427 @@
+# FlyCo parameters for the Isaac provider; per-session values are applied by the bridge.
+/px4ctrl:
+  ros__parameters:
+    mass: 1.0
+    gra: 9.81
+    hov_percent: 0.11736
+    full_thrust: 66.8704
+    ctrl_rate: 100.0
+    pxy_error_max: 0.6
+    vxy_error_max: 1.0
+    pz_error_max: 0.3
+    vz_error_max: 1.0
+    yaw_error_max: 0.7
+    use_yaw_rate_ctrl: false
+    perform_aerodynamics_compensation: false
+    hover.use_hov_percent_kf: false
+    hover.percent_lower_limit: 0.4
+    hover.percent_higher_limit: 0.77
+    gain.hover.Kp0: 1.7
+    gain.hover.Kp1: 1.7
+    gain.hover.Kp2: 1.7
+    gain.hover.Kv0: 1.5
+    gain.hover.Kv1: 1.5
+    gain.hover.Kv2: 1.5
+    gain.hover.Kvi0: 0.2
+    gain.hover.Kvi1: 0.2
+    gain.hover.Kvi2: 0.2
+    gain.hover.Ka0: 1.0
+    gain.hover.Ka1: 1.0
+    gain.hover.Ka2: 1.0
+    gain.hover.Kyaw: 6.0
+    gain.hover.Krp: 15.0
+    gain.track.Kp0: 1.7
+    gain.track.Kp1: 1.7
+    gain.track.Kp2: 1.7
+    gain.track.Kv0: 1.5
+    gain.track.Kv1: 1.5
+    gain.track.Kv2: 1.5
+    gain.track.Kvi0: 0.2
+    gain.track.Kvi1: 0.2
+    gain.track.Kvi2: 0.2
+    gain.track.Ka0: 1.0
+    gain.track.Ka1: 1.0
+    gain.track.Ka2: 1.0
+    gain.track.Kyaw: 6.0
+    gain.track.Krp: 15.0
+    msg_timeout.odom: 0.5
+    msg_timeout.rc: 0.5
+    msg_timeout.cmd: 0.5
+    msg_timeout.imu: 0.5
+/joy_cmd:
+  ros__parameters:
+    time: 0.01
+    transition: 0.3
+    kp_x: 1.0
+    kp_y: 1.0
+    kp_z: 1.0
+    kp_yaw: 1.0
+    kp_pitch: 0.1
+    max_vel: 1.5
+    max_acc: 2.0
+    max_yd: 0.34906584444444444
+    pitch_upper: 25.0
+    pitch_lower: -80.0
+    init_z: 1.5
+    top_angle: 0.47996553611111115
+    left_angle: 0.6544984583333334
+    right_angle: 0.6544984583333334
+    max_dist: 11.0
+    vis_dist: 1.0
+/flyco_planner:
+  ros__parameters:
+    astar.lambda_heu_hc: 10.0
+    astar.resolution_astar: 0.15
+    astar.max_search_time: 0.01
+    hcmap.resolution: 0.15
+    hcmap.interval: 1.0
+    hcmap.plane_thickness: 3.0
+    hcmap.dilateRadius: 0.5
+    hcmap.checkScale: 5.0
+    hcmap.checkSize: 7
+    hcmap.inflateVoxel: 6
+    sdf_map.resolution: 0.15
+    sdf_map.map_size_x: 120.0
+    sdf_map.map_size_y: 80.0
+    sdf_map.map_size_z: 55.0
+    sdf_map.map_back_x: -30.0
+    sdf_map.map_back_y: -40.0
+    sdf_map.obstacles_inflation: 0.3
+    sdf_map.target_obs_inf: 0.6
+    sdf_map.obstacles_inf_z: 0.3
+    sdf_map.target_obs_inf_z: 0.6
+    sdf_map.local_bound_inflate: 0.5
+    sdf_map.local_map_margin: 50
+    sdf_map.ground_height: -3.0
+    sdf_map.default_dist: 0.0
+    sdf_map.virtual_ceil_height: 55.0
+    sdf_map.optimistic: true
+    sdf_map.signed_dist: true
+    sdf_map.p_hit: 0.96
+    sdf_map.p_miss: 0.495
+    sdf_map.p_min: 0.12
+    sdf_map.p_max: 0.93
+    sdf_map.p_occ: 0.3
+    sdf_map.min_ray_length: 0.3
+    sdf_map.max_ray_length: 35.0
+    sdf_map.airsim_flag: true
+    sdf_map.enable_inherit: false
+    map_ros.mapping_fps: 10.0
+    map_ros.partial_time: 0.2
+    map_ros.cx: 320.0
+    map_ros.cy: 240.0
+    map_ros.fx: 554.2562866210938
+    map_ros.fy: 554.2562866210938
+    map_ros.depth_filter_maxdist: 11.5
+    map_ros.depth_filter_mindist: 0.25
+    map_ros.depth_filter_margin: 2
+    map_ros.k_depth_scaling_factor: 1000.0
+    map_ros.skip_pixel: 2
+    map_ros.esdf_slice_height: 0.3
+    map_ros.visualization_truncate_height: 49.5
+    map_ros.visualization_truncate_low: -3.0
+    map_ros.show_occ_time: false
+    map_ros.show_esdf_time: false
+    map_ros.show_all_map: true
+    map_ros.show_local_map: true
+    map_ros.show_depth: true
+    map_ros.show_local_range: true
+    map_ros.show_target: true
+    map_ros.show_env: true
+    map_ros.show_inflate: true
+    map_ros.frame_id: world
+    map_ros.airsim_flag: true
+    map_ros.h_fov: 360.0
+    map_ros.v_fov_min: -37.0
+    map_ros.v_fov_max: 45.0
+    map_ros.inf_fov: 4.0
+    map_ros.h_res: 1.0
+    map_ros.v_res: 1.0
+    map_ros.dil_pixels: 3
+    map_ros.dp: false
+    map_ros.dgp: false
+    map_ros.cp: false
+    map_ros.ctep: true
+    map_ros.extrinsic_x: 0.0
+    map_ros.extrinsic_y: 0.0
+    map_ros.extrinsic_z: -0.0
+    map_ros.extrinsic_roll: 0.0
+    map_ros.extrinsic_pitch: 0.0
+    map_ros.extrinsic_yaw: -0.0
+    sk.cal_number: 5000
+    sk.est_number: 10
+    sk.ds_number: 1500
+    sk.selected_num: 100
+    sk.k_KNN: 6
+    sk.iteration_extraction: 5
+    sk.iteration_shrinking: 5
+    sk.relaxed_candidate_dist: 10.0
+    sk.hybrid_decomp_max_points: 100
+    sk.hybrid_component_radius_scale: 0.0
+    sk.hybrid_projection_weight: 1.0
+    sk.hybrid_min_component_size: 4
+    sk.hybrid_dcrosa_iter: 1
+    sk.hybrid_dcrosa_confidence_th: 0.5
+    sk.hybrid_dcrosa_neighbor_blend: 1.0
+    sk.hybrid_smooth_iter: 0
+    sk.dcrosa_topology_sample_radius: 0.0
+    sk.dcrosa_topology_min_support: 2
+    sk.dcrosa_guided_min_branch_len_scale: 1.0
+    sk.dcrosa_guided_confidence_ratio: 0.75
+    sk.dcrosa_guided_min_group_size: 3
+    fps.cpu: ''
+    fps.input: ''
+    fps.output: ''
+    input.resolution: 0.15
+    input.independent: false
+    hcplanner.precision_: 100
+    hcplanner.global_solver: $(find-pkg-share flyco_ros2)/vendor/planner_simulator/src/hierarchical_coverage_planner/solution/LKH
+    hcplanner.global_par_file: $(find-pkg-share flyco_ros2)/vendor/planner_simulator/src/hierarchical_coverage_planner/solution/global/global.par
+    hcplanner.global_problem_file: $(find-pkg-share flyco_ros2)/vendor/planner_simulator/src/hierarchical_coverage_planner/solution/global/global.tsp
+    hcplanner.global_result_file: $(find-pkg-share flyco_ros2)/vendor/planner_simulator/src/hierarchical_coverage_planner/solution/global/global.txt
+    hcplanner.global_runs: 1
+    hcplanner.local_folder: $(find-pkg-share flyco_ros2)/vendor/planner_simulator/src/hierarchical_coverage_planner/solution/local
+    hcplanner.local_runs: 1
+    hcplanner.boundary_solver: $(find-pkg-share flyco_ros2)/vendor/planner_simulator/src/hierarchical_coverage_planner/solution/CPP
+    hcplanner.vmax_: 1.0
+    hcplanner.amax_: 5.0
+    hcplanner.jmax_: 10.0
+    hcplanner.ydmax_: 0.34906584444444444
+    hcplanner.JointRadius: 1.5
+    hcplanner.local2opt_trial: 10000
+    hcplanner.localrefine_time: 200.0
+    hcplanner.localRange: 10.0
+    hcplanner.overlap_length: 10.0
+    hcplanner.global_consistency: true
+    hcplanner.sub_consistent: true
+    hcplanner.open_chamfer: true
+    hcplanner.global_solving: 150.0
+    viewpoint_manager.visible_range: 10.0
+    viewpoint_manager.viewpoints_distance: 8.0
+    viewpoint_manager.fov_h: 55.0
+    viewpoint_manager.fov_w: 70.0
+    viewpoint_manager.pitch_upper: 35.0
+    viewpoint_manager.pitch_lower: -90.0
+    viewpoint_manager.zGround: true
+    viewpoint_manager.GroundPos: -1.0
+    viewpoint_manager.TopPos: 52.0
+    viewpoint_manager.safeHeight: 1.2
+    viewpoint_manager.safe_radius: 2.5
+    viewpoint_manager.attitude_type: all
+    viewpoint_manager.max_iter_num: 3
+    viewpoint_manager.pose_update: true
+    viewpoint_manager.resolution: 0.15
+    viewpoint_manager.shrink_factor: 0.6
+    viewpoint_manager.vis_inf: 0.6
+    viewpoint_manager.init_size: 500
+    viewpoint_manager.save_lower: 4
+    hcplanner.model_downsample_size: 0.6
+    hcplanner.mesh_sample_size: 5000
+    hcplanner.max_cvx_range: 10.0
+    hcplanner.tsp_horizon: 75.0
+    hcplanner.match_num: 1
+    hcplanner.safe_inner_dist_coeff: 1.1
+    hcplanner.amean_: 0.2
+    hcplanner.tripod_head: false
+    hcplanner.sample_step4normal: 1.0
+    hcplanner.exec_mode: release
+    hcplanner.suspension_rate: 99.5
+    hcplanner.gs_size: 3.0
+    hcplanner.g_flight_h: 1.7
+    hcplanner.g_sample_dist: 5.0
+    hctraj.drone_radius: 0.25
+    hctraj.vmax_: 1.0
+    hctraj.amax_: 5.0
+    hctraj.jmax_: 10.0
+    hctraj.ydmax_: 0.34906584444444444
+    hctraj.safe_inf: 0.4
+    hctraj.rho_T: 60.0
+    hctraj.rho_RT: 80.0
+    hctraj.rho_j: 0.0
+    hctraj.rho_a: 50.0
+    hctraj.rho_v: 1000.0
+    hctraj.rho_p: 500.0
+    hctraj.rho_Rp: 60.0
+    hctraj.rho_e: 1.0
+    fsm.global_planning_fps: 10.0
+    fsm.local_planning_fps: 20.0
+    fsm.progress_fps: 5.0
+    fsm.safety_fps: 20.0
+    fsm.vis_fps: 1.0
+    fsm.global_plan_time: 2.0
+    fsm.global_plan_latency: 1.0
+    fsm.replan_time: 0.15
+    fsm.replan_full_exec: 3.0
+    fsm.replan_periodic: 10.0
+    fsm.replan_proportion: 0.3
+    fsm.safety_horizon: 15.0
+    flyco_planner.sim: true
+    flyco_planner.init_traj: true
+    flyco_planner.enable_inherit: false
+    flyco_planner.init_path_file: ''
+    perception_utils.top_angle: 0.47996553611111115
+    perception_utils.left_angle: 0.6108652277777777
+    perception_utils.right_angle: 0.6108652277777777
+    perception_utils.max_dist: 10.0
+    perception_utils.vis_dist: 1.0
+/traj_server:
+  ros__parameters:
+    traj_server.max_vel: 1.0
+    traj_server.fov_h: 55.0
+    traj_server.fov_w: 70.0
+    traj_server.pitch_upper: 35.0
+    traj_server.pitch_lower: -90.0
+    traj_server.radius: 0.25
+    perception_utils.top_angle: 0.47996553611111115
+    perception_utils.left_angle: 0.6108652277777777
+    perception_utils.right_angle: 0.6108652277777777
+    perception_utils.max_dist: 10.0
+    perception_utils.vis_dist: 3.0
+    traj_server.enable_inherit: false
+/rgb_point_mapping_node:
+  ros__parameters:
+    rgb_mapping.voxel_size: 0.05
+    rgb_mapping.chunk_size: 32
+    rgb_mapping.origin_x: -20.0
+    rgb_mapping.origin_y: -100.0
+    rgb_mapping.origin_z: -5.0
+    rgb_mapping.map_size_x: 200.0
+    rgb_mapping.map_size_y: 200.0
+    rgb_mapping.map_size_z: 80.0
+    rgb_mapping.en_inherit: false
+    rgb_mapping.fx: 381.36114501953125
+    rgb_mapping.fy: 381.36114501953125
+    rgb_mapping.cx: 320.0
+    rgb_mapping.cy: 240.0
+    rgb_mapping.img_rows: 480
+    rgb_mapping.img_cols: 640
+    rgb_mapping.fov_scale: 3.0
+    rgb_mapping.c2b_x: 0.0
+    rgb_mapping.c2b_y: 0.0
+    rgb_mapping.c2b_z: 0.0
+    rgb_mapping.c2b_roll: 0.0
+    rgb_mapping.c2b_pitch: 0.0
+    rgb_mapping.c2b_yaw: 0.0
+    rgb_mapping.model: ''
+/sam_tracking:
+  ros__parameters:
+    ckpt_path: $(var sam_checkpoint_dir)
+    camera_param: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/sam_tracking/config/camera.json
+    camera_info_topic: /isaac/camera/info
+    min_height: 1.0
+    cluster_resolution: 300
+    odom_topic: /isaac/odom
+    pc_topic: /isaac/lidar/world
+    img_topic: /isaac/camera/rgb
+    gimbal_topic: /gimbal_pose
+    gimbal_max_stamp_delta: 0.12
+    cluster_depth_mask_max_stamp_delta: 1.5
+    airsim_camera_pose_enabled: true
+    tf_static_topic: /tf_static
+    airsim_odom_frame: drone_1/odom_local_enu
+    airsim_camera_body_frame: front_center_body/static
+    airsim_camera_optical_frame: front_center_optical/static
+    depth_mask_topic: /tracking/input/depth_mask
+    depth_guidance_enabled: true
+    depth_guidance_consistency_threshold: 0.7
+    depth_guidance_empty_mask_streak: 3
+    depth_guidance_reinit_cooldown_frames: 8
+    depth_guidance_min_mask_area: 400
+    depth_guidance_bbox_padding: 12
+    depth_guidance_max_reinit_bbox_area_ratio: 1.0
+    depth_guidance_max_reinit_bbox_width_ratio: 1.0
+    depth_guidance_max_reinit_bbox_height_ratio: 1.0
+    depth_guidance_reinit_on_inconsistency: true
+    depth_guidance_reinit_on_empty_streak: true
+    sam2_samurai_mode: true
+    sam2_depth_score_weight: 0.7
+    sam2_kf_score_weight: 0.15
+    sam2_memory_bank_geo_score_threshold: 0.0
+    evf_text_init_enabled: true
+    evf_root: $(var evf_root)
+    evf_model_version: YxZhang/evf-sam2
+    evf_model_type: sam2
+    evf_precision: fp16
+    evf_device: cuda
+    evf_image_size: 224
+    evf_semantic_level: false
+    evf_min_mask_area: 256
+    evf_max_init_points: 8
+    query_points_topic: /tracking/prompt/points
+    query_text_topic: /tracking/prompt/text
+    mask_pointcloud_topic: /tracking/target_pointcloud
+    cluster_pointcloud_topic: /tracking/guider_pc
+    filtered_pointcloud_topic: /tracking/env_pc
+    cluster_target_pc_topic: /tracking/target_pc
+    cluster_accumulated_target_pc_topic: /cluster/target_pc_accumulated
+    pose_topic: /tracking/pose
+    mask_image_topic: /tracking/mask/image
+    mask_with_pose_topic: /tracking/mask/with_pose
+    compressed_mask_topic: /sam_tracking/compress_mask_and_transform
+    cluster_projection_topic: /tracking/cluster/projection_image
+    cluster_mask_topic: /tracking/cluster/mask_image
+    cluster_projection_use_accumulated: true
+    cluster_projection_use_hpr: true
+    cluster_incremental_mode: true
+    cluster_input_max_points: 4096
+    cluster_voxel_size: 0.2
+/tracking_prompt:
+  ros__parameters:
+    input_query_points_topic: /query_points
+    input_query_text_topic: /query_text
+    query_points_topic: /tracking/prompt/points
+    query_text_topic: /tracking/prompt/text
+/sam_tracking_node:
+  ros__parameters:
+    all_point_topic: /isaac/lidar/world
+    target_point_topic: /tracking/guider_pc
+    min_height: 1.0
+    cluster_tolerance: 1.0
+    resolution: 0.2
+    min_cluster_size: 300
+    max_cluster_size: 85000
+    cluster_algorithm: incremental_euclidean
+    dbscan_core_min_points: 1
+    selection_temporal_weight: 0.25
+    selection_min_score: 0.05
+    selection_max_centroid_jump: 8.0
+    target_group_mode: 'off'
+    target_group_enabled: false
+    target_refine_mode: guide_radius
+    target_refine_radius: 20.0
+    max_points: 1024
+    rosconsole_level: info
+    incremental: true
+    ground_filter_mode: 'off'
+    ground_filter_margin: 0.3
+    filter_grid_size: 2.0
+    grid_max_height: 6.0
+    grid_height_threshold: 0.5
+    cluster_min_x: -10000
+    cluster_max_x: 10000
+    cluster_min_y: -10000
+    cluster_max_y: 10000
+    cluster_min_z: -10000
+    cluster_max_z: 10000
+    inheritance_enable: false
+    load_path: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/sam_tracking/artifacts/cluster
+    save_path: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/sam_tracking/artifacts/cluster
+    inheritance_all_pc_path: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/sam_tracking/artifacts/cluster/all_pc_saved.pcd
+    inheritance_target_pc_path: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/sam_tracking/artifacts/cluster/target_pc_saved.pcd
+    inheritance_raw_all_point_path: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/sam_tracking/artifacts/cluster/raw_all_pc_saved.pcd
+    save_all_pc_path: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/sam_tracking/artifacts/cluster/all_pc_saved.pcd
+    save_target_pc_path: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/sam_tracking/artifacts/cluster/target_pc_saved.pcd
+    save_raw_all_pc_path: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/sam_tracking/artifacts/cluster/raw_all_pc_saved.pcd
+/prompt_ui:
+  ros__parameters:
+    initial_text_prompt: $(var initial_text_prompt)
+/mesh_predict_node:
+  ros__parameters:
+    profile_config_path: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/mesh_predict/config/profiles/sim.yaml
+    runtime_config_path: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/mesh_predict/config/runtime/pc_mesh_predict_runtime.yaml
+    filtered_pc_topic: ''
+    debug_dump_dir: ''
+    debug_dump_once: false
+    min_height: 1.0
+    nksr_scale: 0.2
+    recall_threshold: 0.9

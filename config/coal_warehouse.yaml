@@ -1,0 +1,29 @@
+# Isaac world ENU metres; camera optical axes: right, down, forward.
+# Prefill FlyCo-UI only; operator clicks "send text" to publish the prompt.
+initial_text_prompt: "A single large, irregular pile of black coal on the warehouse floor."
+spawn: [-14.0, 0.0, 0.15]
+spawn_yaw_degrees: 0.0
+coal_pile:
+  source: assets/coal_piles/coal_pile_final.stl
+  uniform_scale: 2.0
+  center_xy: [0.0, 0.0]
+  base_z: 0.0
+overview_eye: [-20.0, -24.0, 36.0]
+overview_target: [-4.0, 0.0, 1.5]
+physics_hz: 120
+camera_hz: 10
+lidar_hz: 10
+width: 640
+height: 480
+fx: 381.36114501953125
+fy: 381.36114501953125
+cx: 320.0
+cy: 240.0
+camera_offset: [0.125, 0.0, 0.0]
+lidar_offset: [0.0, 0.0, 0.173]
+lidar_azimuths: 360
+lidar_beams: 128
+max_range: 40.0
+full_thrust: 40.0
+observation_voxel_size: 0.08
+viewpoint_distance: 8.0

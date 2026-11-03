@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<package format="3">
+<name>flyco_ros2</name><version>0.1.0</version>
+<description>FlyCo perception, planning and control for the Isaac coal warehouse</description>
+<maintainer email="maintainer@example.com">FlyCo local migration</maintainer>
+<license>PolyForm-Noncommercial-1.0.0</license>
+<buildtool_depend>ament_cmake</buildtool_depend>
+<depend>rclcpp</depend>
+<depend>rclpy</depend>
+<exec_depend>python3-transforms3d</exec_depend>
+<exec_depend>tf2_msgs</exec_depend>
+<depend>ament_index_python</depend>
+<depend>launch</depend>
+<depend>launch_ros</depend>
+<depend>yaml_cpp_vendor</depend>
+<depend>rviz2</depend>
+<depend>ament_index_cpp</depend>
+<depend>std_msgs</depend>
+<depend>std_srvs</depend>
+<depend>geometry_msgs</depend>
+<depend>sensor_msgs</depend>
+<depend>nav_msgs</depend>
+<depend>visualization_msgs</depend>
+<depend>rosgraph_msgs</depend>
+<depend>mavros_msgs</depend>
+<depend>geographic_msgs</depend>
+<depend>tf2</depend>
+<depend>tf2_ros</depend>
+<depend>tf2_geometry_msgs</depend>
+<depend>tf2_sensor_msgs</depend>
+<depend>cv_bridge</depend>
+<depend>image_transport</depend>
+<depend>message_filters</depend>
+<depend>pcl_conversions</depend>
+<depend>quadrotor_msgs</depend>
+<depend>airsim_ros_pkgs</depend>
+<depend>self_msgs_and_srvs</depend>
+<depend>perception_msgs</depend>
+<export><build_type>ament_cmake</build_type></export>
+</package>

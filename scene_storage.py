@@ -26,6 +26,8 @@ def _environment_snapshot(stage):
     layer = stage.Flatten()
     if layer is None:
         raise RuntimeError("Could not create a USD snapshot")
+    # Flatten otherwise adds generated provenance text and anonymous layer IDs.
+    layer.documentation = stage.GetRootLayer().documentation
     snapshot = Usd.Stage.Open(layer)
     for path in RUNTIME_PATHS:
         if snapshot.GetPrimAtPath(path):

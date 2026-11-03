@@ -1,0 +1,24 @@
+ARG ISAAC_IMAGE=nvcr.io/nvidia/isaac-sim:5.1.0@sha256:f3563cb2ba0c18af0b2fb321360dcb73a917b899f879e3213623d6bee484fa54
+FROM ${ISAAC_IMAGE}
+USER root
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+ARG PEGASUS_REF=v5.1.0
+ENV ISAACSIM_PATH=/isaac-sim PEGASUS_DISABLE_ROS2=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl git \
+    && rm -rf /var/lib/apt/lists/* \
+    && git clone --depth 1 --branch "$PEGASUS_REF" \
+      https://github.com/PegasusSimulator/PegasusSimulator.git /opt/PegasusSimulator
+COPY patches/pegasus-5.1.0-local-changes.patch /tmp/pegasus.patch
+RUN git -C /opt/PegasusSimulator \
+      apply --directory=extensions/pegasus.simulator /tmp/pegasus.patch \
+    && /isaac-sim/python.sh -m pip install --no-cache-dir pymavlink==2.4.49 PyYAML==6.0.3 scipy \
+    && /isaac-sim/python.sh -c 'import site; from pathlib import Path; (Path(site.getsitepackages()[0])/"coal_pegasus.pth").write_text("/opt/PegasusSimulator/extensions/pegasus.simulator\n")' \
+    && mkdir -p /home/coal && chmod 1777 /home/coal \
+    && chmod a+rx /isaac-sim \
+    && chmod -R a+rX /opt/PegasusSimulator
+ENV HOME=/home/coal
+WORKDIR /workspace/coal_flyco
+LABEL org.opencontainers.image.source="https://github.com/Yuan-Lin-Liu/Coal_FlyCo"
+ENTRYPOINT []
+CMD ["bash"]

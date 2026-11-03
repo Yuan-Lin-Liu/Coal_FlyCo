@@ -1,0 +1,19 @@
+# Common sensor, control, spawn and text settings live in coal_warehouse.yaml.
+# Every entry selects a separate USD containing exactly one coal pile.
+scenes:
+  "4":
+    name: CoalPile_Final
+    scene: coal_warehouse.usda
+    metadata: scene_metadata.json
+    waypoints: config/initial_waypts.yaml
+  "6":
+    name: CoalPile_Solid
+    scene: scenes/coal_warehouse_6.usda
+    metadata: scenes/coal_warehouse_6_metadata.json
+    waypoints: config/initial_waypts.yaml
+    overrides:
+      coal_pile:
+        source: assets/coal_piles/coal_pile_solid.stl
+        uniform_scale: 2.0
+        center_xy: [0.0, 0.0]
+        base_z: 0.0

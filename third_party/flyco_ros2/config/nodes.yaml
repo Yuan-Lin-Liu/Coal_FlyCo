@@ -1,0 +1,139 @@
+# Nodes used by the Isaac coal-warehouse launch.
+- name: px4ctrl
+  namespace: ''
+  executable: px4ctrl_node
+  arguments: []
+  remappings:
+  - - /px4ctrl/odom
+    - /isaac/odom
+  - - /px4ctrl/cmd
+    - /planning/pos_cmd
+  - - /px4ctrl/imu
+    - /isaac/imu
+  package: flyco_ros2
+  python: false
+- name: joy_cmd
+  namespace: ''
+  executable: joy_cmd
+  arguments: []
+  remappings:
+  - - /joy_ctrl/pos_cmd
+    - planning/pos_cmd
+  - - /joy_ctrl/gimbal_cmd
+    - /gimbal_angle_euler_cmd
+  package: flyco_ros2
+  python: false
+- name: flyco_planner
+  namespace: ''
+  executable: flyco_planner
+  arguments: []
+  remappings:
+  - - /flyco_planner/body_pose
+    - /isaac/odom
+  - - /flyco_planner/gimbal_pose
+    - /gimbal_pose
+  - - /flyco_planner/predicted_mesh
+    - /prediction/predicted_mesh
+  - - /prediction/predicted_mesh
+    - /prediction/predicted_mesh
+  - - /map_ros/pose
+    - /isaac/odom
+  - - /map_ros/depth
+    - /isaac/camera/depth
+  - - /map_ros/cloud
+    - /isaac/lidar/world
+  - - /map_ros/tracking_all_cloud
+    - /tracking/all_pc
+  - - /map_ros/tracking_target_cloud
+    - /tracking/target_pc
+  - - /map_ros/tracking_env_cloud
+    - /tracking/env_pc
+  - - /map_ros/tracking_pose
+    - /tracking/pose
+  - - /map_ros/partial_observation
+    - /pred/input_partial
+  package: flyco_ros2
+  python: false
+- name: traj_server
+  namespace: ''
+  executable: traj_server
+  arguments: []
+  remappings:
+  - - /traj_server/odom
+    - /isaac/odom
+  - - /traj_server/gimbal
+    - /gimbal_pose
+  - - /traj_server/pos_cmd
+    - planning/pos_cmd
+  - - /traj_server/gimbal_cmd
+    - /gimbal_angle_euler_cmd
+  package: flyco_ros2
+  python: false
+- name: rgb_point_mapping_node
+  namespace: ''
+  executable: rgb_point_mapping_node
+  arguments: []
+  remappings:
+  - - /rgb_mapping/rgbd
+    - /isaac/camera/world_points
+  - - /rgb_mapping/img
+    - /isaac/camera/rgb
+  - - /rgb_mapping/body_pose
+    - /isaac/odom
+  - - /rgb_mapping/gimbal_pose
+    - /gimbal_pose
+  package: flyco_ros2
+  python: false
+- name: sam_tracking
+  namespace: ''
+  executable: tracking_node.py
+  arguments: []
+  remappings: []
+  package: flyco_ros2
+  python: true
+- name: tracking_prompt
+  namespace: ''
+  executable: prompt_node.py
+  arguments: []
+  remappings: []
+  package: flyco_ros2
+  python: true
+- name: sam_tracking_node
+  namespace: ''
+  executable: sam_tracking_node
+  arguments: []
+  remappings:
+  - - /cluster/target_pc
+    - /tracking/target_pc
+  - - /cluster/env_pc
+    - /tracking/env_pc
+  - - /cluster/target_pose
+    - /tracking/pose
+  - - /cluster/guide_pc
+    - /tracking/guider_pc
+  - - /cluster/pointcloud
+    - /isaac/lidar/world
+  - - /cluster/pose
+    - /isaac/odom
+  package: flyco_ros2
+  python: false
+- name: prompt_ui
+  namespace: ''
+  executable: prompt_ui_cv_node.py
+  arguments: []
+  remappings:
+  - - /img_topic
+    - /isaac/camera/rgb
+  - - /query_points
+    - /query_points
+  - - /query_text
+    - /query_text
+  package: flyco_ros2
+  python: true
+- name: mesh_predict_node
+  namespace: ''
+  executable: mesh_predict_node.py
+  arguments: []
+  remappings: []
+  package: flyco_ros2
+  python: true
