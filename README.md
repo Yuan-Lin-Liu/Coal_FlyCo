@@ -19,7 +19,7 @@ ACCEPT_EULA=Y ./docker/run.sh --scene 4
 ACCEPT_EULA=Y ./docker/run.sh --scene 6
 ```
 
-`docker/setup.sh` 构建两个本地镜像：Isaac Sim 5.1 + Pegasus，以及 ROS2 Humble + FlyCo。运行时通过宿主机网络上的 TCP 端口通信，共享本次会话目录；源码以只读方式挂载，权重以只读方式挂载，日志和缓存单独持久化。宿主机不需要安装 ROS 或完整 CUDA Toolkit。
+`docker/setup.sh` 基于 NVIDIA Isaac Sim 和 OSRF ROS2 Humble Desktop 官方镜像，构建两个本地镜像：Isaac Sim 5.1 + Pegasus，以及 ROS2 Humble + FlyCo。运行时通过宿主机网络上的 TCP 端口通信，共享本次会话目录；源码以只读方式挂载，权重以只读方式挂载，日志和缓存单独持久化。宿主机不需要安装 ROS 或完整 CUDA Toolkit。
 
 默认显示 Isaac、FlyCo-UI、RViz，需可用的本地 X11/XWayland 显示和 Xauthority。使用 `--headless` 运行无窗口仿真。原有终端管理命令继续可用，例如 `python3 launch.py status`、`python3 launch.py action land`、`python3 launch.py stop`。结束管理器会停止其创建的两个容器。
 
@@ -29,7 +29,7 @@ ACCEPT_EULA=Y ./docker/setup.sh --rebuild # 修改源码后重建；保留下载
 ACCEPT_EULA=Y ./docker/run.sh --scene 6 --headless
 ```
 
-资源下载可中断重试，已通过校验的文件会复用。Google Drive 限流时，可把原始 `checkpoint.pt` 放入 `.local/flyco/models/mesh/` 后重试，或用 `MESH_CHECKPOINT_URL` 指定同一文件的镜像地址。文件仍必须匹配 `config/models.json` 的 SHA256。Hugging Face 模型固定到该清单中的提交版本。镜像构建会根据本机 GPU 编译 CUDA 扩展；可通过 `TORCH_CUDA_ARCH_LIST` 覆盖目标架构，当前 CUDA 11.8 / Torch 2.3.1 组合主要面向已验证的 Ampere 显卡。
+ROS 软件源访问受限时，可设置 `COAL_ROS_APT_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu`，仍使用 ROS 原始签名校验。资源下载可中断重试，已通过校验的文件会复用。Google Drive 限流时，可把原始 `checkpoint.pt` 放入 `.local/flyco/models/mesh/` 后重试，或用 `MESH_CHECKPOINT_URL` 指定同一文件的镜像地址。文件仍必须匹配 `config/models.json` 的 SHA256。Hugging Face 模型固定到该清单中的提交版本。镜像构建会根据本机 GPU 编译 CUDA 扩展；可通过 `TORCH_CUDA_ARCH_LIST` 覆盖目标架构，当前 CUDA 11.8 / Torch 2.3.1 组合主要面向已验证的 Ampere 显卡。
 
 NVIDIA 官方容器和安装要求：[Isaac Sim 5.1](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/install_container.html)、[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)。
 

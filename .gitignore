@@ -1,15 +1,15 @@
 # 运行产物（体积大、每次运行都会变）
-logs/
-backups/
-setup_backups/
+/logs/
+/backups/
+/setup_backups/
 
 # Python
 __pycache__/
 *.pyc
 
 # Local simulator installations and download cache
-.local/
-runtime/
+/.local/
+/runtime/
 
 # Credentials and developer/editor state
 .env
@@ -26,3 +26,6 @@ runtime/
 # Machine-specific CUDA extensions (built from vendored sources)
 third_party/flyco_ros2/vendor/perception_predictor/src/sam_tracking/thirdparty/sam2-realtime/sam2/_C*.so
 third_party/flyco_ros2/vendor/perception_predictor/src/mesh_predict/src/pointnet2_ops/_ext*.so
+
+# Python packaging metadata
+*.egg-info/

@@ -19,3 +19,4 @@ setup_backups
 **/*.pem
 **/*.key
 **/.git-credentials
+**/*.egg-info

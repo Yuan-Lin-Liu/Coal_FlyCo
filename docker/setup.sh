@@ -27,6 +27,7 @@ if [[ "${1:-}" == --rebuild ]] || ! docker image inspect "$ISAAC_IMAGE" >/dev/nu
 fi
 if [[ "${1:-}" == --rebuild ]] || ! docker image inspect "$FLYCO_IMAGE" >/dev/null 2>&1; then
   docker build --progress=plain -f docker/Dockerfile.flyco \
+    --build-arg "ROS_APT_MIRROR=${COAL_ROS_APT_MIRROR:-http://packages.ros.org/ros2/ubuntu}" \
     --build-arg "TORCH_CUDA_ARCH_LIST=$arch" --build-arg "BUILD_JOBS=${BUILD_JOBS:-4}" -t "$FLYCO_IMAGE" .
 fi
 python3 tools/download_models.py
