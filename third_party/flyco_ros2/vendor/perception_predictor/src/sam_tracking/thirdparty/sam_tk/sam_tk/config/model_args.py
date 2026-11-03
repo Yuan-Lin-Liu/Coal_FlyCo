@@ -7,7 +7,8 @@ _THIS_FILE = Path(__file__).resolve()
 _SAM_TK_ROOT = _THIS_FILE.parents[1]
 _PACKAGE_ROOT = _THIS_FILE.parents[4]
 _VENDORED_SAM2_ROOT = _PACKAGE_ROOT / "thirdparty" / "sam2-realtime"
-_CKPT_ROOT = _PACKAGE_ROOT / "ckpt"
+_models_root = os.environ.get("FLYCO_MODELS")
+_CKPT_ROOT = Path(_models_root) / "sam2" if _models_root else _PACKAGE_ROOT / "ckpt"
 def _as_str(path: Path) -> str:
     return str(path)
 
