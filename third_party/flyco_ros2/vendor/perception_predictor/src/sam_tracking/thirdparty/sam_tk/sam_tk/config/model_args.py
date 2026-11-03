@@ -26,12 +26,15 @@ def _require_vendored_sam2_install(package_root):
             f"pip install -e {_VENDORED_SAM2_ROOT}"
         )
 
-    expected_root = (_VENDORED_SAM2_ROOT / "sam2").resolve()
+    # Docker installs the same vendored runtime in the image; native mode
+    # continues to require the project-local source tree by default.
+    runtime_root = Path(os.environ.get("FLYCO_SAM_SOURCE", _VENDORED_SAM2_ROOT))
+    expected_root = (runtime_root / "sam2").resolve()
     try:
         package_root.relative_to(expected_root)
     except ValueError as exc:
         raise ImportError(
-            "The active 'sam2' package is not the vendored sam_tracking runtime. "
+            "The active 'sam2' package is not the configured project runtime. "
             f"Found: {package_root}. Expected: {expected_root}. "
             f"Install it with: pip install -e {_VENDORED_SAM2_ROOT}"
         ) from exc

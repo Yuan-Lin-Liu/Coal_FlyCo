@@ -6,10 +6,10 @@ Isaac Sim 5.1 / Pegasus 提供无人机物理、RGB-D 相机和激光雷达；Fl
 
 源码、两个煤堆 STL 和两个 USD 场景保存在此仓库；Isaac、ROS、Python 环境和模型权重由安装脚本获取，不进入 Git。发布者已确认取得当前 FlyCo ROS2 修改版的公开发布授权；第三方来源和原始条款见 [THIRD_PARTY.md](THIRD_PARTY.md)。
 
-宿主机需要 Linux x86_64、兼容的 NVIDIA RTX 显卡及驱动、Docker Engine、NVIDIA Container Toolkit、`python3-yaml`、`curl`。本机验证配置为 RTX 3090 / 驱动 580.178.04。首次安装包含数十 GB 的下载与构建，请预留至少 100 GB；缓存、权重、构建结果保留在本地。
+宿主机需要 Linux x86_64、Python 3.10+、兼容的 NVIDIA RTX 显卡及驱动、Docker Engine、NVIDIA Container Toolkit、`python3-yaml`、`curl`。本机验证配置为 RTX 3090 / 驱动 580.178.04。首次安装包含数十 GB 的下载与构建，请预留至少 100 GB；缓存、权重、构建结果保留在本地。
 
 ```bash
-git clone git@github.com:Yuan-Lin-Liu/Coal_FlyCo.git
+git clone https://github.com/Yuan-Lin-Liu/Coal_FlyCo.git
 cd Coal_FlyCo
 # 如缺少宿主机 Python YAML 包：sudo apt install python3-yaml
 # 阅读 NVIDIA Isaac Sim EULA 后设置 ACCEPT_EULA=Y。
