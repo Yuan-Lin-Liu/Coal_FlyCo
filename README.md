@@ -37,6 +37,8 @@ NVIDIA 官方容器和安装要求：[Isaac Sim 5.1](https://docs.isaacsim.omniv
 
 若下载依赖本机 HTTP 代理，应同时配置宿主机的 `http_proxy` / `https_proxy`、Docker daemon 的镜像下载代理，以及 Docker 客户端配置中的构建代理。构建期间访问 `127.0.0.1` 代理时，可设置 `COAL_BUILD_NETWORK=host`。此选项只影响镜像构建网络；不要通过关闭 TLS 校验解决证书错误。
 
+真机原生部署（Orin + PX4 v1.16、不使用 Docker）见 [部署说明](docs/deploy_orin.md)，其中明确列出 ARM 库、控制接口和真实传感器尚需完成的适配。
+
 ## 本机原生启动与场景选择
 
 ```bash
