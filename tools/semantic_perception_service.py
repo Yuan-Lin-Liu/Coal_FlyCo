@@ -47,12 +47,14 @@ def running():
 def start():
     started=not running()
     if started:
+        # Remove a previous failed container before reusing its stable name.
+        subprocess.run(['docker','rm','-f',NAME],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         subprocess.run(['python3',str(SOURCE/'prepare_assets.py'),'--backend','A','--check'],check=True,stdout=subprocess.DEVNULL)
         subprocess.run(['docker','image','inspect',IMAGE],check=True,stdout=subprocess.DEVNULL)
         logs=ROOT/'runtime/sam-a-traces';logs.mkdir(parents=True,exist_ok=True)
         state=ROOT/'runtime/sam-a-service';state.mkdir(parents=True,exist_ok=True)
         (SOURCE/'runtime').mkdir(exist_ok=True)
-        subprocess.run(['docker','run','-d','--rm','--init','--name',NAME,
+        subprocess.run(['docker','run','-d','--init','--name',NAME,
             '--label','org.coal-flyco.role=sam-a','--network','host','--gpus','all',
             '--user',str(os.getuid())+':'+str(os.getgid()),'--cpus','6','--memory','12g',
             '-e','HOME=/tmp','-e','SAM_AD_A_MODEL=large',
@@ -80,7 +82,8 @@ def start():
 
 
 def stop():
-    if running():subprocess.run(['docker','stop','-t','20',NAME],check=True,stdout=subprocess.DEVNULL)
+    subprocess.run(['docker','stop','-t','20',NAME],check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    subprocess.run(['docker','rm','-f',NAME],check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
 
 def main():
