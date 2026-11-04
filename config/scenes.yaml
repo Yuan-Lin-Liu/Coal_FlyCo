@@ -15,5 +15,5 @@ scenes:
       coal_pile:
         source: assets/coal_piles/coal_pile_solid.stl
         uniform_scale: 2.0
-        center_xy: [0.0, 0.0]
+        center_xy: [8.0, 0.0]
         base_z: 0.0

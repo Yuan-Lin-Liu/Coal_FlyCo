@@ -6,10 +6,11 @@ spawn_yaw_degrees: 0.0
 coal_pile:
   source: assets/coal_piles/coal_pile_final.stl
   uniform_scale: 2.0
-  center_xy: [0.0, 0.0]
+  # Drone spawn is x=-14 m, yaw=0, so +X is farther along its view.
+  center_xy: [8.0, 0.0]
   base_z: 0.0
 overview_eye: [-20.0, -24.0, 36.0]
-overview_target: [-4.0, 0.0, 1.5]
+overview_target: [4.0, 0.0, 1.5]
 physics_hz: 120
 camera_hz: 10
 lidar_hz: 10

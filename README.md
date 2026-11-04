@@ -50,7 +50,7 @@ NVIDIA 官方容器和安装要求：[Isaac Sim 5.1](https://docs.isaacsim.omniv
 | `4` | `assets/coal_piles/coal_pile_final.stl` | 12×6×5 | `coal_warehouse.usda` |
 | `6` | `assets/coal_piles/coal_pile_solid.stl` | 约 10.61×5.34×5 | `scenes/coal_warehouse_6.usda` |
 
-每个场景只有一个煤堆，底面中心为 `(0, 0, 0)`。两个 STL 均等比例放大 2 倍，显示、碰撞与雷达采用同一模型。`--pile` 与 `--scene` 等效；切换前先结束当前会话。
+每个场景只有一个煤堆，底面中心为 `(8, 0, 0)`。无人机出生在 `(-14, 0, 0.15)` 并朝向 `+X`，所以煤堆相对原位置沿无人机视线向后移了 8 米；两个 STL 均等比例放大 2 倍，显示、碰撞与雷达采用同一模型。`--pile` 与 `--scene` 等效；切换前先结束当前会话。
 
 默认打开 Isaac、FlyCo-UI 和 RViz2。可使用 `--no-rviz` 关闭自动 RViz，或使用 `--headless` 无窗口运行。`ISAACSIM_PATH` 可指定其他 Isaac 安装。
 

@@ -207,11 +207,16 @@ try:
             hits = raycast.raycast_batch(origin+rays*.45, rays, cfg['max_range'])
             arrays['cloud'] = hits[np.all(np.isfinite(hits), axis=1)].astype('<f4')
             next_lidar = t+1/cfg['lidar_hz']-.0001
-        if t >= next_camera:
+        capture_camera = t >= next_camera
+        if capture_camera or step % 4 == 0:
+            # Keep the mount current on every render, including frames between
+            # 10 Hz RGB-D publications. A stale mount can trail inside the
+            # moving airframe and contaminate RTX temporal history.
             camera_position, optical_rotation = camera_pose(position, attitude, gimbal, cfg['camera_offset'])
             q = Rotation.from_matrix(optical_rotation).as_quat()
             camera.set_world_pose(camera_position, q[[3, 0, 1, 2]], camera_axes='ros')
             world.render()
+        if capture_camera:
             rgb, depth = camera.get_rgb(), camera.get_depth()
             if rgb is not None and depth is not None and rgb.size and depth.size:
                 arrays['rgb'] = np.ascontiguousarray(rgb[:, :, :3], dtype='u1')
@@ -226,8 +231,6 @@ try:
                     write_json(args.runtime/'camera_pose.json', dict(t=t,
                         position=frame['camera_position'], rotation=frame['camera_rotation']))
             next_camera = t+1/cfg['camera_hz']-.0001
-        elif step % 4 == 0:
-            world.render()
         send_packet(connection, frame, arrays)
         feedback, _ = recv_packet(connection)
         backend.set_command(feedback['control'])

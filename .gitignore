@@ -2,6 +2,7 @@
 /logs/
 /backups/
 /setup_backups/
+/scenes/backups/
 
 # Python
 __pycache__/
