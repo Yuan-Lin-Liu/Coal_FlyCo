@@ -54,7 +54,7 @@
     {
       "path": "assets.lock.json",
       "bytes": 90421,
-      "sha256": "e40ed9d3ae9e44d3dea18b8b5dc6dd7765719561a3b81d31748af2f3a84536a6"
+      "sha256": "0c5b50d68514ae95eea689b3979faae315e022fe86046b7fac8f8cf6dbad205b"
     },
     {
       "path": "docs/A和D感知模块通俗接入说明.docx",
@@ -306,256 +306,256 @@
     },
     {
       "path": "sam2-official/LICENSE",
-      "bytes": 11558,
-      "sha256": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6",
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
       "backend": "A",
       "archive": "sam2",
       "member": "LICENSE"
     },
     {
       "path": "sam2-official/LICENSE_cctorch",
-      "bytes": 1595,
-      "sha256": "b4d90f9c25b30d3fbd412f50dd4204f17e16af2813f4f3fe25b2f0d0f97e35fd",
+      "bytes": 1566,
+      "sha256": "687d4f65ffe399358b170e22572564a16689e496f85a79dc5385fccf6bbc9558",
       "backend": "A",
       "archive": "sam2",
       "member": "LICENSE_cctorch"
     },
     {
       "path": "sam2-official/README.md",
-      "bytes": 16473,
-      "sha256": "8187448c95ac50ea30d9c591e550fd2c07620269387489cf9b46132fb178bd55",
+      "bytes": 16249,
+      "sha256": "eea69ee1042fb30933c5ca5019fbf0f6f9366cec5e792109281b5023a4f1589c",
       "backend": "A",
       "archive": "sam2",
       "member": "README.md"
     },
     {
       "path": "sam2-official/pyproject.toml",
-      "bytes": 126,
-      "sha256": "1585b90b808aa18902556732f5914fbd601a5b07beb8c4fdf32a2a02086feedc",
+      "bytes": 120,
+      "sha256": "c58230f78769620dcd11d15824d491b049be8f542eeb875d2e8091be797ec3f3",
       "backend": "A",
       "archive": "sam2",
       "member": "pyproject.toml"
     },
     {
       "path": "sam2-official/sam2/__init__.py",
-      "bytes": 406,
-      "sha256": "fd116e43c17587fce9d5cc7de043dd183b29e4af5c369bd09ca121ffb03755f0",
+      "bytes": 395,
+      "sha256": "b87ca1e95cd54b81766e8c74acf0e937952639529e40d2b4088693286f49419e",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/__init__.py"
     },
     {
       "path": "sam2-official/sam2/automatic_mask_generator.py",
-      "bytes": 18915,
-      "sha256": "b888136cfcd40f04aedcfccf56516f778038414ba9ae2bd41b3725a04ca89cc3",
+      "bytes": 18461,
+      "sha256": "66df266dbe14412305ae3398f0ec1bb21b303a93216b102d767e6c4ee5d4c3d7",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/automatic_mask_generator.py"
     },
     {
       "path": "sam2-official/sam2/benchmark.py",
-      "bytes": 2903,
-      "sha256": "eba42a58c402afb076df36a2ec83b4e184d766b0aa0d986a330b0f0ee25ed793",
+      "bytes": 2811,
+      "sha256": "9b7a3506b88842ec09031fb7cd0fc1d3fed82e137ce06dbca10495e6c180dda9",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/benchmark.py"
     },
     {
       "path": "sam2-official/sam2/build_sam.py",
-      "bytes": 6579,
-      "sha256": "d962a9ebc5b65aa03a8d74159742b9993b8affb44b205ba78685db8d199dc3a7",
+      "bytes": 6405,
+      "sha256": "856d64d71e44407401297b551884fb4cd1aba8082de0ff5fc60fac3dd42f094d",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/build_sam.py"
     },
     {
       "path": "sam2-official/sam2/configs/sam2.1/sam2.1_hiera_b+.yaml",
-      "bytes": 3766,
-      "sha256": "ef47e14197a65c1fd542e1862270ee851c2b15e571b2c58ceb0329d15be33769",
+      "bytes": 3650,
+      "sha256": "37d6c56b07a7f8d08baaa314315c60dc3aabe2edc66cd92bac6d1ed50038e788",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/configs/sam2.1/sam2.1_hiera_b+.yaml"
     },
     {
       "path": "sam2-official/sam2/configs/sam2.1/sam2.1_hiera_l.yaml",
-      "bytes": 3918,
-      "sha256": "4c9983b04adddc5e4586c7809a4c21dd90975bccc5026aea3c22232783c18112",
+      "bytes": 3798,
+      "sha256": "1dbd6cb6dfebeaf588c7006ee222c6efbfa9049a7ad472a3cdfb2f5d919e8107",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/configs/sam2.1/sam2.1_hiera_l.yaml"
     },
     {
       "path": "sam2-official/sam2/configs/sam2.1/sam2.1_hiera_s.yaml",
-      "bytes": 3880,
-      "sha256": "592306d059a2df49898fefcb939c11abc9dfc8fd962bc77c31d132e68cb4320a",
+      "bytes": 3761,
+      "sha256": "0f36b91e86e58d06c87e42997166212468b88b98b60e4d816d5e4d4d088b6f55",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/configs/sam2.1/sam2.1_hiera_s.yaml"
     },
     {
       "path": "sam2-official/sam2/configs/sam2.1/sam2.1_hiera_t.yaml",
-      "bytes": 3976,
-      "sha256": "9eb1c5e9db577925464492ccbbf6810731bcbbde31325fb8d297d78c3eb5d9dc",
+      "bytes": 3855,
+      "sha256": "f932eac1c6241e910031b2f000a81cd9f8a8d4896e2277ab5ffb721f378b188d",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/configs/sam2.1/sam2.1_hiera_t.yaml"
     },
     {
       "path": "sam2-official/sam2/configs/sam2.1_training/sam2.1_hiera_b+_MOSE_finetune.yaml",
-      "bytes": 11595,
-      "sha256": "a3e2653cc96fbdde7a498da3d48e9db69d04baa9bfaab83ffde68a0022289361",
+      "bytes": 11256,
+      "sha256": "d96919e157527116c3a80c6ec961151bda98e5eb988ae4dd85be6e7efbd2b51f",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/configs/sam2.1_training/sam2.1_hiera_b+_MOSE_finetune.yaml"
     },
     {
       "path": "sam2-official/sam2/configs/sam2/sam2_hiera_b+.yaml",
-      "bytes": 3661,
-      "sha256": "58ae5539466e1da4b856346427a29a8f3675a0c1132ec0b81bc3911ee1775ce9",
+      "bytes": 3548,
+      "sha256": "644d1a9aaa7e14183802246dee4f43627e067d77dd89f1f40d83657db18d038b",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/configs/sam2/sam2_hiera_b+.yaml"
     },
     {
       "path": "sam2-official/sam2/configs/sam2/sam2_hiera_l.yaml",
-      "bytes": 3813,
-      "sha256": "32d7bf07be4e3717985f76052f740b90e4cfaf45588621b286de24962c2d2fd3",
+      "bytes": 3696,
+      "sha256": "0ee9f2037fd98489212bb0b78a56f33ac82eb177cf5e52c88be3714cb84eea26",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/configs/sam2/sam2_hiera_l.yaml"
     },
     {
       "path": "sam2-official/sam2/configs/sam2/sam2_hiera_s.yaml",
-      "bytes": 3775,
-      "sha256": "03d12a4ac21f82eb1e9d5c3c831983986b05812c861b5893a02bc3bdd9ecac4e",
+      "bytes": 3659,
+      "sha256": "20e0ade957a4ab5e8138c93c346a8d8965c0b00d1a05fa0e79ce477985904188",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/configs/sam2/sam2_hiera_s.yaml"
     },
     {
       "path": "sam2-official/sam2/configs/sam2/sam2_hiera_t.yaml",
-      "bytes": 3871,
-      "sha256": "829706a768d641fa8644e194d1d69322af5d837b099e8731af1476227f7c5691",
+      "bytes": 3753,
+      "sha256": "33399c73cd13bbc3d0c1cea843fa2fc255fdb20139fe07f042743e046ac46b6b",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/configs/sam2/sam2_hiera_t.yaml"
     },
     {
       "path": "sam2-official/sam2/csrc/connected_components.cu",
-      "bytes": 8097,
-      "sha256": "cf9bb101204537262ad46111828d365f67c88726b31efc16af13c8bfbf77a553",
+      "bytes": 7808,
+      "sha256": "926c277e24f40609622bb4ce49912838d1c799e63edcccc1c75e65e701acd497",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/csrc/connected_components.cu"
     },
     {
       "path": "sam2-official/sam2/modeling/__init__.py",
-      "bytes": 202,
-      "sha256": "9f2c336d52111ef51bae5b4959d8941968e9e26638c681de5388c58d3080624d",
+      "bytes": 197,
+      "sha256": "34bd8069c54764e7b8d73a78905dbe6467140a2f73170875128f6ca4d8cdd0aa",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/__init__.py"
     },
     {
       "path": "sam2-official/sam2/modeling/backbones/__init__.py",
-      "bytes": 202,
-      "sha256": "9f2c336d52111ef51bae5b4959d8941968e9e26638c681de5388c58d3080624d",
+      "bytes": 197,
+      "sha256": "34bd8069c54764e7b8d73a78905dbe6467140a2f73170875128f6ca4d8cdd0aa",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/backbones/__init__.py"
     },
     {
       "path": "sam2-official/sam2/modeling/backbones/hieradet.py",
-      "bytes": 10320,
-      "sha256": "e793e2a2545cf4e2dedcd0d0654e6cd6b118179d94d5a5eeffa29b7cb6b96fd0",
+      "bytes": 10003,
+      "sha256": "03785581ca304d0451ae0df7a08ee0bf1e1dbe66fad285066e6b9ffc0d88d64f",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/backbones/hieradet.py"
     },
     {
       "path": "sam2-official/sam2/modeling/backbones/image_encoder.py",
-      "bytes": 4840,
-      "sha256": "5920c2ad317cebad34a747f10426ece14303b59a813ae79c5e95dc6b5d171663",
+      "bytes": 4706,
+      "sha256": "16eaad232220386f510ca8dfab8655e63699977149a4daf9ce9c6f374e6777a9",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/backbones/image_encoder.py"
     },
     {
       "path": "sam2-official/sam2/modeling/backbones/utils.py",
-      "bytes": 3100,
-      "sha256": "967625e0701b240c0169574845bc18e61e18a41c128198239363bc8b96fdc662",
+      "bytes": 3007,
+      "sha256": "c4a0657db2a92bda2a7ff116cd4017f6b1c59af6408093d8874eb08a0df476ad",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/backbones/utils.py"
     },
     {
       "path": "sam2-official/sam2/modeling/memory_attention.py",
-      "bytes": 5678,
-      "sha256": "4c82b71c2cd518011cdb4341c75f18e6b8b6de411de96e4aec424bfe9ed9a0be",
+      "bytes": 5509,
+      "sha256": "07358cb7f58ec3788e88ff4e6415f8a9d628a3963529d6e2c915494a5347c8e2",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/memory_attention.py"
     },
     {
       "path": "sam2-official/sam2/modeling/memory_encoder.py",
-      "bytes": 5838,
-      "sha256": "2803cd030e6a067978f272cb35c24b0690b1e7eecb51fdbd224a74cab6f31e3f",
+      "bytes": 5657,
+      "sha256": "73f7089ae5fdacdfcaaf3deca1ca6d9f84d89e7deb9cf97589622a9ef17ba42f",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/memory_encoder.py"
     },
     {
       "path": "sam2-official/sam2/modeling/position_encoding.py",
-      "bytes": 9219,
-      "sha256": "e19abfd3a2758755d9182cf0355bdfa28b6db61851e31546fefee9ca27f27ebf",
+      "bytes": 8980,
+      "sha256": "b51404718c0d38f381293c8e5e00a15d129651b7f09b1158002d8974a30967b5",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/position_encoding.py"
     },
     {
       "path": "sam2-official/sam2/modeling/sam/__init__.py",
-      "bytes": 202,
-      "sha256": "9f2c336d52111ef51bae5b4959d8941968e9e26638c681de5388c58d3080624d",
+      "bytes": 197,
+      "sha256": "34bd8069c54764e7b8d73a78905dbe6467140a2f73170875128f6ca4d8cdd0aa",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/sam/__init__.py"
     },
     {
       "path": "sam2-official/sam2/modeling/sam/mask_decoder.py",
-      "bytes": 12952,
-      "sha256": "b53d185daee38021270aa57f607281418b5544bfe549d91abd6dbcea48420432",
+      "bytes": 12657,
+      "sha256": "ca3523c58365574faddf1bfb54f374e4b4beba05127185ea2b17d22b916e099a",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/sam/mask_decoder.py"
     },
     {
       "path": "sam2-official/sam2/modeling/sam/prompt_encoder.py",
-      "bytes": 7743,
-      "sha256": "4dd05bad47c1b0a16cc6f4c095b877433e7d96f80160dc06f4b7f9559b0c3b3b",
+      "bytes": 7541,
+      "sha256": "4965ccb4a4504aa4d7246b2ad66ffeacd2626415c86a261dc1c65ffd8ae1d40d",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/sam/prompt_encoder.py"
     },
     {
       "path": "sam2-official/sam2/modeling/sam/transformer.py",
-      "bytes": 11072,
-      "sha256": "47f32206d8286c0538ed789273e607214a3e41892d3c907a8e7a6cfdd4240ca0",
+      "bytes": 10761,
+      "sha256": "cda19052331e775190ce8b1159efcb828a4632d931a6d8bd4d47109f121782f1",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/sam/transformer.py"
     },
     {
       "path": "sam2-official/sam2/modeling/sam2_base.py",
-      "bytes": 47892,
-      "sha256": "5ac8be9a6e9935d2f4ee6efa1edff87915aa7cdd7da1207e1be21af6462093f2",
+      "bytes": 46983,
+      "sha256": "69a46b44e8625f509791352bd09beaafe589cd7d872721384e63d37f9fdc6e41",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/sam2_base.py"
     },
     {
       "path": "sam2-official/sam2/modeling/sam2_utils.py",
-      "bytes": 13496,
-      "sha256": "74175905345361fe8fd2bbf3aecd772552b5b1c68b6cf5081953230c8fd82c10",
+      "bytes": 13173,
+      "sha256": "e35bbf13bc2e544a0272cd3f9539af38a752676ac3cd744be31cd8220afee804",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/modeling/sam2_utils.py"
@@ -594,64 +594,64 @@
     },
     {
       "path": "sam2-official/sam2/sam2_image_predictor.py",
-      "bytes": 20403,
-      "sha256": "edd7281ec91bea1c5c9ee498b09c823b534fe31e36fc3dfbe7696e6d7a216bef",
+      "bytes": 19937,
+      "sha256": "f13e5f9d94e5c8d9d2c3622dab20c8f334c089ef2ee5ea8e199da7d332b029ba",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/sam2_image_predictor.py"
     },
     {
       "path": "sam2-official/sam2/sam2_video_predictor.py",
-      "bytes": 60144,
-      "sha256": "1e2de167d91974e96de21b51237e20f1a30f9b37fae706c854974386b4800d50",
+      "bytes": 58921,
+      "sha256": "912555920a77f72ded07839efa33fcceecc79f3523abbec783f0be46ee2c55c2",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/sam2_video_predictor.py"
     },
     {
       "path": "sam2-official/sam2/sam2_video_predictor_legacy.py",
-      "bytes": 59949,
-      "sha256": "ec0992b44ac2bdc3db0f0693e94b15e3e813e30ab5f3f57f878857043161e1d4",
+      "bytes": 58777,
+      "sha256": "e0c054112f21bfa63620f2026c8bb2e0f4e284b138d09426a08d39f2e882c3f2",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/sam2_video_predictor_legacy.py"
     },
     {
       "path": "sam2-official/sam2/utils/__init__.py",
-      "bytes": 202,
-      "sha256": "9f2c336d52111ef51bae5b4959d8941968e9e26638c681de5388c58d3080624d",
+      "bytes": 197,
+      "sha256": "34bd8069c54764e7b8d73a78905dbe6467140a2f73170875128f6ca4d8cdd0aa",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/utils/__init__.py"
     },
     {
       "path": "sam2-official/sam2/utils/amg.py",
-      "bytes": 13190,
-      "sha256": "15649a414e87d38b2863f8408b16be1e1c16b2c4f9faef154e108d81f194e438",
+      "bytes": 12842,
+      "sha256": "b7b33090e2af72e04dbb815c8f32aff41a4ed1abf9668f62b59f1bdd640ca5d8",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/utils/amg.py"
     },
     {
       "path": "sam2-official/sam2/utils/misc.py",
-      "bytes": 13439,
-      "sha256": "ff2d441d16cedd6cc50a4bcdcbff29a1cb4d46d40c1123c3a471f265bbed3b0e",
+      "bytes": 13090,
+      "sha256": "01600c01c161cd079d7106fb1d4da845cf91aa31ab2bcecaf8cb151b6d6d20a2",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/utils/misc.py"
     },
     {
       "path": "sam2-official/sam2/utils/transforms.py",
-      "bytes": 5003,
-      "sha256": "c200d1931d501ea70cd73a84128dfa20f92b3f1f4e2d74760d032410fda0d0be",
+      "bytes": 4885,
+      "sha256": "ba3a64f4600c62f209206a6df3b40e3fcf133edae32fad658831bb0c2a6d1146",
       "backend": "A",
       "archive": "sam2",
       "member": "sam2/utils/transforms.py"
     },
     {
       "path": "sam2-official/setup.py",
-      "bytes": 5225,
-      "sha256": "5e8fa9eea2d742bcaccbfe054839cf8760b5fea28cde49e8bc43e4e03eb8c7c6",
+      "bytes": 5051,
+      "sha256": "9ca49a33def161d2cafa56ddef744178fa56d3219242bd8b69909904c2e63dff",
       "backend": "A",
       "archive": "sam2",
       "member": "setup.py"
