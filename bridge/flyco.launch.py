@@ -37,6 +37,9 @@ def generate_launch_description():
         return value
 
     params = replace(yaml.safe_load((source/'config/flyco.yaml').read_text()))
+    tracking = params['/sam_tracking']['ros__parameters']
+    tracking['segmentation_backend'] = os.environ.get('FLYCO_ISAAC_SEGMENTATION_BACKEND', tracking['segmentation_backend'])
+    tracking['segmentation_endpoint'] = os.environ.get('FLYCO_ISAAC_SEGMENTATION_ENDPOINT', tracking['segmentation_endpoint'])
     for entry in params.values():
         entry['ros__parameters']['use_sim_time'] = True
     params['/px4ctrl']['ros__parameters'].update(
@@ -101,6 +104,9 @@ def generate_launch_description():
     if os.environ.get('FLYCO_ISAAC_RVIZ') == '1':
         actions.append(ExecuteProcess(cmd=['bash', str(root/'tools/run_rviz.sh')],
                                       output='screen'))
+    if 'sam_tracking' not in omitted:
+        actions.append(ExecuteProcess(cmd=[str(flyco_runtime/'venv/bin/python'),
+            str(root/'bridge/perception_image.py')], output='screen'))
     nodes = []
     for spec in yaml.safe_load((source/'config/nodes.yaml').read_text()):
         name = spec['name']

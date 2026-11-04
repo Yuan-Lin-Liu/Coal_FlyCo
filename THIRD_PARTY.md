@@ -21,3 +21,9 @@ user must accept its EULA. No NVIDIA driver or installed simulator is in Git.
 
 The checked-in native Embree/libigl libraries target Linux x86_64. CUDA
 extensions are rebuilt in Docker for the GPU architecture detected by setup.sh.
+
+SAM_AD_Perception: https://github.com/wentengsong627-sudo/SAM_AD_Perception.
+The vendored A runtime includes the generic tracking/completion fixes developed
+for this workspace. Upstream provenance, asset hashes and required third-party
+notices remain in third_party/SAM_AD_Perception/provenance.json, assets.lock.json
+and LICENSES/. Model weights and pinned dependency downloads are excluded from Git.

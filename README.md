@@ -2,11 +2,13 @@
 
 Isaac Sim 5.1 / Pegasus 提供无人机物理、RGB-D 相机和激光雷达；FlyCo 负责目标分割、网格预测、覆盖规划与位置控制。仿真使用 Isaac 状态作为定位输入，当前未接入 Super-LIO 或 PX4 固件。
 
+当前默认使用通用 **语义目标感知（Semantic Perception）**，原 EVF-SAM2/SAMURAI 方案可用 `--segmentation-backend native` 对照运行。接入差异、验证结果和模型准备方式见 [识别模块说明](docs/semantic-perception.md)。
+
 ## 新机器安装（Docker）
 
 源码、两个煤堆 STL 和两个 USD 场景保存在此仓库；Isaac、ROS、Python 环境和模型权重由安装脚本获取，不进入 Git。发布者已确认取得当前 FlyCo ROS2 修改版的公开发布授权；第三方来源和原始条款见 [THIRD_PARTY.md](THIRD_PARTY.md)。
 
-宿主机需要 Linux x86_64、Python 3.10+、兼容的 NVIDIA RTX 显卡及驱动、Docker Engine、NVIDIA Container Toolkit、`python3-yaml`、`curl`。本机验证配置为 RTX 3090 / 驱动 580.178.04。首次安装包含数十 GB 的下载与构建，请预留至少 100 GB；缓存、权重、构建结果保留在本地。
+宿主机需要 Linux x86_64、Python 3.10+、兼容的 NVIDIA RTX 显卡及驱动、Docker Engine、Docker Buildx 插件（`docker buildx version` 可用）、NVIDIA Container Toolkit、`python3-yaml`、`curl`。已验证配置包括 RTX 3090 / 驱动 580.178.04，以及 RTX 4090 D / 驱动 580.196.07（见 [本机复现记录](REPRODUCTION.md)）。首次安装包含数十 GB 的下载与构建，请预留至少 100 GB；缓存、权重、构建结果保留在本地。
 
 ```bash
 git clone https://github.com/Yuan-Lin-Liu/Coal_FlyCo.git
@@ -19,7 +21,7 @@ ACCEPT_EULA=Y ./docker/run.sh --scene 4
 ACCEPT_EULA=Y ./docker/run.sh --scene 6
 ```
 
-`docker/setup.sh` 基于 NVIDIA Isaac Sim 和 OSRF ROS2 Humble Desktop 官方镜像，构建两个本地镜像：Isaac Sim 5.1 + Pegasus，以及 ROS2 Humble + FlyCo。运行时通过宿主机网络上的 TCP 端口通信，共享本次会话目录；源码以只读方式挂载，权重以只读方式挂载，日志和缓存单独持久化。宿主机不需要安装 ROS 或完整 CUDA Toolkit。
+`docker/setup.sh` 基于 NVIDIA Isaac Sim 和 OSRF ROS2 Humble Desktop 官方镜像，构建三个本地镜像：Isaac Sim 5.1 + Pegasus、ROS2 Humble + FlyCo，以及独立的 语义目标感知服务。运行时通过宿主机网络上的 TCP 端口通信，共享本次会话目录；源码以只读方式挂载，权重以只读方式挂载，日志和缓存单独持久化。宿主机不需要安装 ROS 或完整 CUDA Toolkit。
 
 默认显示 Isaac、FlyCo-UI、RViz，需可用的本地 X11/XWayland 显示和 Xauthority。使用 `--headless` 运行无窗口仿真。原有终端管理命令继续可用，例如 `python3 launch.py status`、`python3 launch.py action land`、`python3 launch.py stop`。结束管理器会停止其创建的两个容器。
 
@@ -29,9 +31,11 @@ ACCEPT_EULA=Y ./docker/setup.sh --rebuild # 修改源码后重建；保留下载
 ACCEPT_EULA=Y ./docker/run.sh --scene 6 --headless
 ```
 
-ROS 软件源访问受限时，可设置 `COAL_ROS_APT_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu`，仍使用 ROS 原始签名校验。资源下载可中断重试，已通过校验的文件会复用。Google Drive 限流时，可把原始 `checkpoint.pt` 放入 `.local/flyco/models/mesh/` 后重试，或用 `MESH_CHECKPOINT_URL` 指定同一文件的镜像地址。文件仍必须匹配 `config/models.json` 的 SHA256。Hugging Face 模型固定到该清单中的提交版本。镜像构建会根据本机 GPU 编译 CUDA 扩展；可通过 `TORCH_CUDA_ARCH_LIST` 覆盖目标架构，当前 CUDA 11.8 / Torch 2.3.1 组合主要面向已验证的 Ampere 显卡。
+ROS 软件源访问受限时，可设置 `COAL_ROS_APT_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu`，仍使用 ROS 原始签名校验。资源下载可中断重试，已通过校验的文件会复用。Google Drive 限流时，可把原始 `checkpoint.pt` 放入 `.local/flyco/models/mesh/` 后重试，或用 `MESH_CHECKPOINT_URL` 指定同一文件的镜像地址。文件仍必须匹配 `config/models.json` 的 SHA256。Hugging Face 模型固定到该清单中的提交版本。镜像构建会根据本机 GPU 编译 CUDA 扩展；可通过 `TORCH_CUDA_ARCH_LIST` 覆盖目标架构，当前 CUDA 11.8 / Torch 2.3.1 组合已在 RTX 3090（Ampere）和 RTX 4090 D（Ada）上验证。
 
 NVIDIA 官方容器和安装要求：[Isaac Sim 5.1](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/install_container.html)、[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)。
+
+若下载依赖本机 HTTP 代理，应同时配置宿主机的 `http_proxy` / `https_proxy`、Docker daemon 的镜像下载代理，以及 Docker 客户端配置中的构建代理。构建期间访问 `127.0.0.1` 代理时，可设置 `COAL_BUILD_NETWORK=host`。此选项只影响镜像构建网络；不要通过关闭 TLS 校验解决证书错误。
 
 ## 本机原生启动与场景选择
 
@@ -54,8 +58,8 @@ NVIDIA 官方容器和安装要求：[Isaac Sim 5.1](https://docs.isaacsim.omniv
 
 1. 等待算法启动，点 **1 Initialize**，等待起点初始化完成。
 2. 点 **2 Initial flight**，原地垂直起飞至航点高度后悬停；当前设置为 2 m。
-3. 在 **FlyCo-UI** 点选煤堆并发送点提示，或点击 **send text** 发送文字提示。
-4. 等待目标点云和预测网格出现，再点 **3 Enable planning**。
+3. 在 **FlyCo-UI** 点选煤堆并发送提示；默认语义目标感知后端请点击 **send text** 发送文字，点提示需使用 `--segmentation-backend native`。
+4. 在 RViz 的 **Semantic Perception Image** 查看紫红色识别覆盖图。等待目标点云和预测网格出现，再点 **3 Enable planning**。
 5. 点 **4 Autonomous scan** 开始扫描。
 6. 点 **Land** 降落，确认 `GROUNDED` 且旋翼停止。
 
@@ -107,7 +111,8 @@ initial_text_prompt: "A single large, irregular pile of black coal on the wareho
 | `bridge/` | ROS 接口、FlyCo 启动与终端日志 |
 | `third_party/flyco_ros2/` | 当前使用的 FlyCo 感知、规划、控制源码 |
 | `third_party/ros_interfaces/` | 自定义 ROS 消息与服务 |
-| `third_party/EVF-SAM/` | 文字目标初始化模型代码 |
+| `third_party/EVF-SAM/` | 原生后端的文字目标初始化模型代码 |
+| `third_party/SAM_AD_Perception/` | 默认语义目标感知模块及模型资产清单 |
 | `.local/flyco/` | Python 环境、CUDA/OMPL、权重、模型缓存及构建结果 |
 | `.local/isaacsim/`、`.local/PegasusSimulator/` | 本机仿真环境 |
 

@@ -181,10 +181,14 @@ class TrackingPipeline:
             prompt=decision.prompt,
             reason=decision.reason,
         )
-        self.depth_guidance.note_reinitialized(decision.reason)
-        self.reset_runtime_state()
+        deferred = bool(getattr(self.provider, "last_reinit_deferred", False))
+        if deferred:
+            self.depth_guidance.note_reinit_deferred(decision.reason)
+        else:
+            self.depth_guidance.note_reinitialized(decision.reason)
+            self.reset_runtime_state()
         return {
-            "state": "reinitialized",
+            "state": "reinit_pending" if deferred else "reinitialized",
             "depth_mask_iou": decision.consistency,
             "reinit_reason": decision.reason,
             "reinit_bbox": decision.bbox,
@@ -223,7 +227,7 @@ class TrackingPipeline:
                 track_mask=None,
                 depth_mask=processed_depth_mask,
             )
-            if reinit_result is not None and reinit_result["state"] == "reinitialized":
+            if reinit_result is not None and reinit_result["state"] in ("reinitialized", "reinit_pending"):
                 track_mask = reinit_result.get("track_mask")
                 if track_mask is not None and np.count_nonzero(track_mask) > 0:
                     return self._build_tracked_result(
@@ -242,7 +246,7 @@ class TrackingPipeline:
                 track_mask=track_mask,
                 depth_mask=processed_depth_mask,
             )
-            if reinit_result is not None and reinit_result["state"] == "reinitialized":
+            if reinit_result is not None and reinit_result["state"] in ("reinitialized", "reinit_pending"):
                 track_mask = reinit_result.get("track_mask")
                 if track_mask is not None and np.count_nonzero(track_mask) > 0:
                     return self._build_tracked_result(
@@ -260,7 +264,7 @@ class TrackingPipeline:
             track_mask=track_mask,
             depth_mask=processed_depth_mask,
         )
-        if reinit_result is not None and reinit_result["state"] == "reinitialized":
+        if reinit_result is not None and reinit_result["state"] in ("reinitialized", "reinit_pending"):
             track_mask = reinit_result.get("track_mask")
             if track_mask is not None and np.count_nonzero(track_mask) > 0:
                 return self._build_tracked_result(

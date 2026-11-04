@@ -305,6 +305,8 @@
     rgb_mapping.model: ''
 /sam_tracking:
   ros__parameters:
+    segmentation_backend: semantic
+    segmentation_endpoint: http://127.0.0.1:8851
     ckpt_path: $(var sam_checkpoint_dir)
     camera_param: $(find-pkg-share flyco_ros2)/vendor/perception_predictor/src/sam_tracking/config/camera.json
     camera_info_topic: /isaac/camera/info

@@ -43,7 +43,10 @@ RUN --mount=type=cache,target=/root/.cache/pip "$FLYCO_RUNTIME/venv/bin/python" 
     && "$FLYCO_RUNTIME/venv/bin/python" -m pip install --no-index --no-deps \
       -f https://data.pyg.org/whl/torch-2.3.0+cu118.html torch-scatter==2.1.2+pt23cu118
 ENV PATH=/opt/flyco-runtime/venv/bin:/usr/local/cuda-11.8/bin:${PATH}
-RUN --mount=type=cache,target=/root/.cache/pip git init /tmp/NKSR \
+# NKSR declares its name and dependencies in pyproject.toml. The ROS image's
+# setuptools 59 does not read that metadata and otherwise builds UNKNOWN.
+RUN --mount=type=cache,target=/root/.cache/pip python -m pip install setuptools==69.5.1 \
+    && git init /tmp/NKSR \
     && git -C /tmp/NKSR remote add origin https://github.com/nv-tlabs/NKSR.git \
     && git -C /tmp/NKSR fetch --depth 1 origin "$NKSR_REVISION" \
     && git -C /tmp/NKSR checkout FETCH_HEAD \

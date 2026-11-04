@@ -2,6 +2,7 @@
 from array import array
 import json
 import os
+import signal
 from pathlib import Path
 import socket
 import sys
@@ -11,8 +12,9 @@ import time
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import SingleThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.signals import SignalHandlerOptions
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import QuaternionStamped, TransformStamped
 from nav_msgs.msg import Odometry
@@ -316,9 +318,14 @@ class Bridge(Node):
 
 
 def main():
-    rclpy.init()
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = Bridge()
-    executor = MultiThreadedExecutor(num_threads=3)
+    # Let callbacks finish before invalidating their ROS entities.
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(signum, lambda *_: node.stop.set())
+    # Sensor I/O already has its own worker; these short callbacks can run
+    # synchronously, leaving no queued executor callbacks during destruction.
+    executor = SingleThreadedExecutor()
     executor.add_node(node)
     try:
         while rclpy.ok() and not node.stop.is_set():
@@ -328,7 +335,7 @@ def main():
     finally:
         node.stop.set()
         node.worker.join(timeout=1.)
-        executor.shutdown(timeout_sec=1.)
+        executor.shutdown()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

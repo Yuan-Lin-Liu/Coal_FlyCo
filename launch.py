@@ -70,6 +70,10 @@ def main():
     parser.add_argument('--headless', action='store_true')
     parser.add_argument('--docker', action='store_true', help='Run Isaac and FlyCo in project Docker images')
     parser.add_argument('--no-perception', action='store_true')
+    parser.add_argument('--segmentation-backend', type=lambda value: 'semantic' if value.lower() == 'a' else value.lower(),
+                        choices=('semantic','native'), default='semantic',
+                        help='Semantic Perception (default) or original EVF-SAM2/SAMURAI')
+    parser.add_argument('--segmentation-endpoint', default='http://127.0.0.1:8851')
     parser.add_argument('--no-ui', action='store_true')
     visualization = parser.add_mutually_exclusive_group()
     visualization.add_argument('--rviz', dest='rviz', action='store_true',
@@ -183,8 +187,11 @@ def main():
     rviz_enabled = args.rviz if args.rviz is not None else not (args.headless or args.no_ui)
     env = dict(os.environ, FLYCO_ISAAC_RUNTIME=str(run), FLYCO_ISAAC_PORT=str(args.port),
         FLYCO_ISAAC_DOMAIN=str(args.domain), FLYCO_ISAAC_NO_PERCEPTION=str(int(args.no_perception)),
-        FLYCO_ISAAC_NO_UI=str(int(args.no_ui or args.headless)), FLYCO_ISAAC_RVIZ=str(int(rviz_enabled)))
+        FLYCO_ISAAC_NO_UI=str(int(args.no_ui or args.headless)), FLYCO_ISAAC_RVIZ=str(int(rviz_enabled)),
+        FLYCO_ISAAC_SEGMENTATION_BACKEND=args.segmentation_backend,
+        FLYCO_ISAAC_SEGMENTATION_ENDPOINT=args.segmentation_endpoint)
     children = []
+    a_service_started = False
     stopping = False
 
     def stop_signal(*unused):
@@ -199,10 +206,23 @@ def main():
              'scene_name': profile['name'], 'config': str(run/'scene_config.yaml'),
              'waypoints': str(run/'initial_waypts.yaml'),
              'flyco_source': str(ROOT/'third_party/flyco_ros2'),
-             'flyco_runtime': str(flyco_runtime), 'docker': args.docker}
+             'flyco_runtime': str(flyco_runtime), 'docker': args.docker,
+             'segmentation_backend': args.segmentation_backend,
+             'segmentation_endpoint': args.segmentation_endpoint}
     (run/'session.json').write_text(json.dumps(state, indent=2))
     output = ConsoleOutput(run, verbose=args.verbose)
     try:
+        if not args.no_perception and args.segmentation_backend == 'semantic':
+            import semantic_perception_service as sam_a_service
+            if args.segmentation_endpoint == sam_a_service.ENDPOINT:
+                print('正在准备语义目标感知服务。', flush=True)
+                service = sam_a_service.start()
+                a_service_started = service['started']
+                (run/'segmentation_service.json').write_text(json.dumps(service['health'], indent=2))
+            else:
+                info = sam_a_service.health(args.segmentation_endpoint)
+                if info.get('backend') != 'A' or info.get('status') != 'ready':
+                    raise RuntimeError('Configured semantic perception service is not ready')
         print(f'场景 {profile["id"]}: {profile["name"]}；正在启动 Isaac；日志目录：'+str(run), flush=True)
         sim_log = (run/'isaac.log').open('wb')
         cmd = [str(ROOT/'isaac_python.sh'), '-u', str(ROOT/'sim/flyco_app.py'),
@@ -267,6 +287,8 @@ def main():
         if args.docker:
             for role in ('flyco', 'isaac'):
                 container_runtime.stop(role, run)
+        if a_service_started:
+            sam_a_service.stop()
         state['ended'] = time.time()
         (run/'session.json').write_text(json.dumps(state, indent=2))
         output.emit()

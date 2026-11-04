@@ -45,13 +45,9 @@ from sam_tracking.cluster import ClusterPostprocess, ClusterRuntime
 from sam_tracking.cluster.cluster_postprocess import IncrementalClusterConfig
 from sam_tracking.core import DepthGuidancePolicy, PromptSession, TrackingPipeline
 from sam_tracking.core.pointcloud_projector import PointCloudProjector
-from sam_tracking.providers.sam2_camera_provider import (
-    EVFTextInitConfig,
-    SAM2RuntimeConfig,
-)
 from sam_tracking.ros.message_builders import build_compress_mask_with_pose
 from sam_tracking.ros.params import load_tracking_runtime_params
-from sam_tracking.providers import Sam2CameraProvider
+from sam_tracking.providers.factory import make_camera_provider
 from sam_tracking.utils.mask_with_transform_manage import TransformManager
 from sam_tracking.ros.topics import DEFAULT_PROMPT_POINTS_TOPIC
 from sensor_msgs_py import point_cloud2
@@ -73,26 +69,13 @@ class SAMTrackingManager(Node):
         self.ckpt_path = self.runtime_params.ckpt_path
         self.cluster_resolution = self.runtime_params.cluster_resolution
 
-        self.provider = Sam2CameraProvider(
-            evf_text_init_config=EVFTextInitConfig(
-                enabled=self.runtime_params.evf_text_init_enabled,
-                evf_root=self.runtime_params.evf_root,
-                model_version=self.runtime_params.evf_model_version,
-                model_type=self.runtime_params.evf_model_type,
-                precision=self.runtime_params.evf_precision,
-                device=self.runtime_params.evf_device,
-                image_size=self.runtime_params.evf_image_size,
-                semantic_level=self.runtime_params.evf_semantic_level,
-                min_mask_area=self.runtime_params.evf_min_mask_area,
-                max_init_points=self.runtime_params.evf_max_init_points,
-            ),
-            sam2_runtime_config=SAM2RuntimeConfig(
-                samurai_mode=self.runtime_params.sam2_samurai_mode,
-                depth_score_weight=self.runtime_params.sam2_depth_score_weight,
-                kf_score_weight=self.runtime_params.sam2_kf_score_weight,
-                memory_bank_geo_score_threshold=self.runtime_params.sam2_memory_bank_geo_score_threshold,
-            ),
+        self.segmentation_backend = parameter(self, "segmentation_backend", "semantic")
+        self.provider = make_camera_provider(
+            backend=self.segmentation_backend,
+            runtime_params=self.runtime_params,
+            endpoint=parameter(self, "segmentation_endpoint", "http://127.0.0.1:8851"),
         )
+        self.get_logger().info("Segmentation backend: %s" % ("Semantic Perception" if self.segmentation_backend.upper() in ("A", "SEMANTIC") else self.segmentation_backend))
         self._bridge = CvBridge()
 
         self.camera_model = PinholeCameraModel()
@@ -314,6 +297,7 @@ class SAMTrackingManager(Node):
                 durability=DurabilityPolicy.VOLATILE,
             ),
         )
+        self.binary_mask_pub = self.create_publisher(Image, "/perception/segmentation/mask", 1)
         self.img_debug_pub = self.create_publisher(
             Image,
             self.runtime_params.debug_image_topic,
@@ -731,6 +715,19 @@ class SAMTrackingManager(Node):
         body_to_world = tft.quaternion_matrix(body_quat)[:3, :3]
         return body_to_world @ gimbal_to_body @ self.airsim_camera_optical_rotation
 
+    def _publish_unavailable_mask(self, frame_rgb, header):
+        if getattr(self.provider, "backend", None) != "A":
+            return
+        image = np.zeros_like(frame_rgb)
+        cv2.putText(image, "No reliable mask - reacquiring target", (12, 28),
+                    cv2.FONT_HERSHEY_SIMPLEX, .55, (255, 210, 80), 1, cv2.LINE_AA)
+        message = self._bridge.cv2_to_imgmsg(image, "rgb8")
+        message.header = header
+        self.img_pub.publish(message)
+        empty = self._bridge.cv2_to_imgmsg(np.zeros(frame_rgb.shape[:2], np.uint8), "mono8")
+        empty.header = header
+        self.binary_mask_pub.publish(empty)
+
     @torch.inference_mode()
     @torch.cuda.amp.autocast()
     def tracking_timer_callback(self):
@@ -771,6 +768,9 @@ class SAMTrackingManager(Node):
         orin_frame = img.copy()
         img = cv2.resize(img, (640, 480))
 
+        if hasattr(self.provider, "begin_frame"):
+            stamp = img_msg.header.stamp
+            self.provider.begin_frame((int(stamp.sec), int(stamp.nanosec)))
         ok, reason, provider_action, initial_mask = self.pipeline.sync_provider_state(frame_rgb=img)
         if not ok:
             if reason == "No query points":
@@ -812,7 +812,10 @@ class SAMTrackingManager(Node):
                 depth_mask=depth_mask,
                 depth_prompt_points=depth_prompt_points,
             )
-        if tracked is None:
+        if tracked is None or tracked.get("state") == "reinit_pending":
+            # A deferred recovery has no image payload. It is a normal loss
+            # state, not a tracked result; keep the ROS node alive and clear UI.
+            self._publish_unavailable_mask(img, img_msg.header)
             return
         if tracked["state"] == "reinitialized":
             self.get_logger().info(
@@ -850,6 +853,10 @@ class SAMTrackingManager(Node):
         mask_image_msg = self._bridge.cv2_to_imgmsg(tracked["masked_rgb"], "rgb8")
         mask_image_msg.header.stamp = img_msg.header.stamp
         self.img_pub.publish(mask_image_msg)
+        binary = (tracked["track_mask"] > 0).astype(np.uint8) * 255
+        binary_msg = self._bridge.cv2_to_imgmsg(binary, "mono8")
+        binary_msg.header = img_msg.header
+        self.binary_mask_pub.publish(binary_msg)
 
         width, height = self.camera_info.width, self.camera_info.height
         mask_resized = cv2.resize(tracked["track_mask"], (width, height))
@@ -900,7 +907,9 @@ class SAMTrackingManager(Node):
                     self.cluster_guide_pub,
                 )
 
-            tracked["mask_rgba"][:, :, 3] = tracked["mask_rgba"][:, :, 3] * 255
+            # Native masks may be 0/1; HTTP masks are 0/255. Multiplying uint8
+            # 255 by 255 would wrap to 1 and break the downstream alpha mask.
+            tracked["mask_rgba"][:, :, 3] = (tracked["track_mask"] > 0).astype(np.uint8) * 255
             pose_to_publish = camera_pose if camera_pose is not None else body2world
             child_frame_id = (
                 self.runtime_params.airsim_camera_optical_frame

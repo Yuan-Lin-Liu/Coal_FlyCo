@@ -7,6 +7,7 @@ Panels:
     - /Global Options1
     - /Vehicle and trajectories1
     - /Isaac sensors1
+    - /Target perception1
     Splitter Ratio: 0.52
   Tree Height: 550
 - Class: rviz_common/Views
@@ -294,6 +295,20 @@ Visualization Manager:
     Name: Target perception
     Enabled: true
     Displays:
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Name: Semantic Perception Image
+      Value: true
+      Normalize Range: true
+      Min Value: 0
+      Max Value: 1
+      Median window: 5
+      Topic:
+        Value: /perception/segmentation/overlay
+        Depth: 2
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:

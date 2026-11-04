@@ -1,0 +1,43 @@
+{
+  "base_revision": "f788c5cd026132d75202aba7b6f683d8cd99d0ce",
+  "patch": "A-tracking-recovery-cumulative.patch",
+  "patch_sha256": "68f0fef129b5324d28fce2240aef3b0b93ccc39c0543715b08d0ec2db4cd1527",
+  "source_fingerprint": "711e757080421757dc74f98320ba0ff418e3f953abba10449965527201ee1cc5",
+  "backup_path": "/home/buaa/FlyCo/.docker-data/backups/sam-a-multiview-20261102-221255",
+  "protocol_and_regression_tests_passed": 20,
+  "integrity_verified_files": 118,
+  "full_flight": {
+    "trace_directory": "/home/buaa/FlyCo/.docker-data/home/workspace/SAM_AD_Perception/runtime/flyco-traces/003dae37511b4d5785afae992e4d67ae",
+    "planner_log": "/home/buaa/FlyCo/.docker-data/logs/planner/flyco_2026-11-02_14-17-07.log",
+    "ros_log": "/home/buaa/FlyCo/.docker-data/logs/ros/16015f56-d6c8-11f1-b5ea-1893418ea193/sam_tracking-2.log",
+    "frames": 1011,
+    "visible_frames": 1008,
+    "states": {
+      "[[1, 'VERIFYING']]": 2,
+      "[[1, 'TRACKING']]": 1008,
+      "[[1, 'SUSPECT']]": 1
+    },
+    "longest_valid_mask_interval": 1.4537792205810547,
+    "mask_and_transform_publications": 1008,
+    "longest_mask_transform_interval": 1.5160000324249268,
+    "rejection_reasons": {
+      "area_jump": 1
+    },
+    "coverage": "99.58",
+    "flight_statistics": [
+      "503.16",
+      "462.50"
+    ],
+    "finished": true,
+    "last_states": [
+      [
+        1,
+        "TRACKING"
+      ]
+    ],
+    "hint_count": 52,
+    "scope": "From target text initialization through first planner Flight Finished; wall-clock intervals",
+    "finished_epoch": 1793629552.6751728,
+    "ros_image_id": "sha256:cb0ba79382db31897e30b1dfbcd186b8c29fd3dbd0878a11f66576bda125f013"
+  }
+}

@@ -46,17 +46,19 @@
 #include "std_msgs/msg/float32.hpp"
 
 PX4CtrlFSM* pFSM;
+volatile sig_atomic_t stop_requested = 0;
 
 void mySigintHandler(int sig) {
-    RCLCPP_INFO(rclcpp::get_logger("flyco.px4ctrl"), "[PX4Ctrl] exit...");
-    rclcpp::shutdown();
+    stop_requested = 1;
 }
 
 int main(int argc, char* argv[]) {
-    rclcpp::init(argc, argv);
+    // Keep the context valid until the control loop has finished its callbacks.
+    rclcpp::init(argc, argv, rclcpp::InitOptions(), rclcpp::SignalHandlerOptions::None);
   auto node = std::make_shared<rclcpp::Node>("px4ctrl", rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
     const auto& nh = node;
     signal(SIGINT, mySigintHandler);
+    signal(SIGTERM, mySigintHandler);
     Parameter_t param;
     Controller controller(param);
     controller.set_FCU_mode = node->create_client<mavros_msgs::srv::SetMode>("/mavros/set_mode");
@@ -91,12 +93,15 @@ int main(int argc, char* argv[]) {
     // fsm.traj_start_trigger_pub = nh->create_publisher<geometry_msgs::msg::PoseStamped>("/traj_start_trigger", rclcpp::QoS(10).reliable());
     rclcpp::WallRate r(param.ctrl_rate);
     // ---- process ----
-    while (rclcpp::ok()) {
+    while (rclcpp::ok() && !stop_requested) {
         r.sleep();
+        if (stop_requested || !rclcpp::ok())
+            break;
         rclcpp::spin_some(node);
         if(fsm.px4_init())
             fsm.process();
     }
 
+    rclcpp::shutdown();
     return 0;
 }

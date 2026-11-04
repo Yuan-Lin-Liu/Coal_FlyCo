@@ -178,6 +178,11 @@ class DepthGuidancePolicy:
         second_area = (second[2] - second[0]) * (second[3] - second[1])
         return intersection / float(first_area + second_area - intersection)
 
+    def note_reinit_deferred(self, reason):
+        """Throttle a recovery request without counting it as verified recovery."""
+        self._last_reinit_frame = self._frame_index
+        self.last_reinit_reason = str(reason or "") + "_deferred"
+
     def note_reinitialized(self, reason):
         self._last_reinit_frame = self._frame_index
         self.last_reinit_reason = str(reason or "")
