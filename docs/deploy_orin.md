@@ -37,22 +37,28 @@ colcon build
 
 Odin SDK 按目标架构选择；Orin 使用目标架构安装的 Embree 3 和 OMPL，x86 仿真主机可复用现有依赖缓存。非系统依赖前缀仍按安装位置设置 `CMAKE_PREFIX_PATH`。更新代码后再次 `colcon build` 即可。构建结构、单包维护和改造前 HEAD 见 [构建说明](build.md)。
 
-## 2. 配置与每个终端的环境
+## 2. 每个终端的环境与设备配置
 
-Orin 每个终端：
+Orin 和地面电脑每个终端先加载环境：
 
 ```bash
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-export ROS_DOMAIN_ID=0 ROS_LOCALHOST_ONLY=0 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ```
 
-地面每个终端也使用相同的 `source install/setup.bash`。两端与 PX4 的 `UXRCE_DDS_DOM_ID` 保持一致，两端系统时间同步，DDS 网络互通。
+ROS2 域、网络范围和 RMW 实现暂不指定，真机部署时根据地面电脑、Orin 和现有 PX4 DDS 配置统一确认。若现有通信已正常，直接复用；需要调整时再确定 `ROS_DOMAIN_ID`、`ROS_LOCALHOST_ONLY`、`RMW_IMPLEMENTATION` 及飞控的 `UXRCE_DDS_DOM_ID`。部署时还需保证两端时间同步和 DDS 网络互通。仿真继续按 [仿真说明](px4_qgc.md) 使用域 64。
 
-编辑 `config/vehicle.odin.local.yaml`：
+**Odin 自带的标定由驱动处理**：驱动连接设备时读取该设备的 `calib.yaml`，根据标定生成去畸变图像。本工程已默认启用 `/odin1/image/undistorted`，并由驱动发布匹配的 `/odin1/camera_info`，两者使用 `odin_camera_optical_frame`；设备内部的 IMU、雷达、相机外参通过 `/odin1/wiwc` 交给适配节点。正常使用本工程提供的驱动和配置，无需手工填写相机内参、重复去畸变或重新标定设备内部外参。驱动原说明见 [标定文件](../third_party/drivers/odin_ros_driver/README.md#41-file-structure) 和 [话题说明](../third_party/drivers/odin_ros_driver/README.md#43-ros-topics)；具体话题名以本工程驱动实现为准。
 
-- 填写 `odin_adapter.ros__parameters.body_to_imu_*` 的实测安装外参。
-- 确认图像已去畸变、相机光学坐标系和 CameraInfo 一致。
+`odin_adapter.ros__parameters.body_to_imu_*` 是 **Odin 在飞机上的安装关系**，设备出厂标定无法知道它：
+
+- `body_to_imu_translation`：Odin IMU 原点在飞机 `base_link`（前、左、上）坐标系中的位置，单位米。
+- `body_to_imu_quaternion`：将 Odin IMU 坐标中的向量旋转到飞机机体系的旋转，顺序 `[x, y, z, w]`。
+
+这两项现在先保留模板，等实际机架、安装朝向和原有定位链确认后再处理。如果此前已通过 TF、机体原点定义或 PX4 外部定位参数处理过安装关系，应先核对并复用已有结果，避免重复补偿。模板中的零平移和单位四元数表示两坐标系完全重合，只有实际采用该定义时才适用。图像、CameraInfo 和光学坐标的一致性也在设备接入时确认，正常情况下由上述驱动自动保证；更换驱动版本、图像分辨率或另接相机后才需要重新核对相应配置。
+
+其余 `config/vehicle.odin.local.yaml` 配置在真机部署时确认：
+
 - Orin 的 `segmentation_endpoint` 保持 `http://127.0.0.1:8851`，语义推理在 Orin。
 - 地面模型 Python、权重路径通过下面的 launch 参数指定。
 - 按实机配置 `bounds_min/max`、速度、加速度和飞控外部定位融合。定位输入只保留一个发布源。
