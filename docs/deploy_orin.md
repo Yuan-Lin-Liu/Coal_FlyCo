@@ -94,39 +94,27 @@ ros2 launch flyco_real ground.launch.py config:="$PWD/config/vehicle.odin.local.
   model_python:=/实际地面模型环境/bin/python models_dir:=/实际权重目录 rviz:=true
 ```
 
-**Orin 终端 D：机载算法**：
-
-```bash
-ros2 launch flyco_real native.launch.py role:=onboard start_sensor_bridge:=false start_mode:=false \
-  config:="$PWD/config/vehicle.odin.local.yaml"
-```
-
-**Orin 终端 E：FlyCo 模式节点**：
+**Orin 终端 D：注册与自动使能**：
 
 ```bash
 ros2 launch flyco_real mode.launch.py config:="$PWD/config/vehicle.odin.local.yaml"
 ```
 
-模式节点启动后自动向 PX4 注册 FlyCo，QGC 随后显示该模式。节点保持运行；注册本身不需要调用服务。
+定位、飞控、地面心跳稳定后，节点自动注册并使能 FlyCo；不会自动解锁。
 
-`start_sensor_bridge:=false` 复用终端 B 的定位桥，`start_mode:=false` 将模式节点留给终端 E 单独启动。若希望驱动与全部算法统一启动，可改用 `hardware.launch.py role:=onboard`，并停止终端 B 和 E，避免重复启动定位桥和模式节点。
+**Orin 终端 E：FlyCo 机载算法与任务节点**：
+
+```bash
+ros2 launch flyco_real flyco.launch.py config:="$PWD/config/vehicle.odin.local.yaml"
+```
+
+此入口复用独立 Odin 定位桥，不再创建第二个定位桥或模式节点；地面预测继续由地面 launch 运行。
 
 ## 4. 飞行操作
 
-日常操作统一使用任务节点；`mode.launch.py` 负责注册和持续控制，`task.py` 负责一次操作后退出：
+等待机载终端出现 `FlyCo ready`，确认定位和地面预测链路正常。在地面以 **Position** 模式正常解锁，然后通过 RC/QGC 切换到 **FlyCo**。任务节点自动调度 PX4 内置 Takeoff，升至距本次地面位置约 2 m 后返回 FlyCo 悬停。起飞只触发一次；空中切模式、未解锁或落地状态未知时不自动起飞。
 
-```bash
-ros2 run flyco_real task.py status
-ros2 run flyco_real task.py initialize
-ros2 run flyco_real task.py enable
-ros2 run flyco_real task.py select-mode
-ros2 run flyco_real task.py arm
-ros2 run flyco_real task.py takeoff
-```
-
-先确认状态中的 `odom_ok`、`px4_ok`、`ground_ok` 均为 true。逐条执行并观察结果：`select-mode` 后 QGC 显示 FlyCo；`arm` 只请求正常解锁，受 PX4 预飞检查约束；`takeoff` 调度 PX4 内置 Takeoff，完成后返回 FlyCo 悬停。状态 `takeoff_phase: complete` 表示已返回。启动节点不会自动解锁。也可通过 RC/QGC 选择模式、正常解锁。
-
-起飞悬停后发送文字，等待目标点云及预测网格，再激活规划和扫描：
+起飞悬停后发送目标文字，等待目标点云及预测网格，再激活规划和扫描：
 
 ```bash
 ros2 run flyco_real task.py text '一个煤堆'
@@ -134,15 +122,16 @@ ros2 run flyco_real task.py enable-planning
 ros2 run flyco_real task.py scan
 ```
 
-需要暂停、恢复或降落时：
+按需要执行对应操作：
 
 ```bash
 ros2 run flyco_real task.py hold
 ros2 run flyco_real task.py resume
 ros2 run flyco_real task.py land
+ros2 run flyco_real task.py status
 ```
 
-`initial-flight` 是 `takeoff` 的兼容别名。降落等动作返回成功表示请求已发送；实际以 QGC 模式、运动、落地和停桨为准。先落地停桨，再在各 launch 终端 Ctrl+C 结束节点。
+任务状态为 `/flyco/mission/status`。降落请求成功后仍需确认实际落地、上锁、停桨，再结束节点。`task.py enable/select-mode/arm/takeoff` 保留为显式操作工具，常规流程不需要逐条执行。
 
 ## 5. 地面 RViz2 与核心排查
 

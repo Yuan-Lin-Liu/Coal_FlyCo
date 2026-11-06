@@ -12,6 +12,9 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    role = os.environ.get('FLYCO_ISAAC_STACK_ROLE', 'all')
+    if role not in ('all', 'sensors', 'algorithms'):
+        raise ValueError('Invalid Isaac ROS stack role: '+role)
     root = Path(__file__).resolve().parents[1]
     runtime = Path(os.environ['FLYCO_ISAAC_RUNTIME'])
     source = root/'third_party/flyco_ros2'
@@ -94,13 +97,15 @@ def generate_launch_description():
     (runtime/'cluster').mkdir(exist_ok=True)
     config = runtime/'flyco_params.yaml'
     config.write_text(yaml.safe_dump(params, sort_keys=False))
-    actions = [ExecuteProcess(cmd=['/usr/bin/python3', str(root/'bridge/ros_bridge.py')],
-                              output='screen')]
+    actions = []
+    if role != 'algorithms':
+        actions.append(ExecuteProcess(cmd=['/usr/bin/python3', str(root/'bridge/ros_bridge.py')],
+                                      output='screen'))
     critical = actions[:]
     omitted = set()
     if sensor_config.get('flight_controller') in ('px4', 'px4-native'):
         omitted.add('px4ctrl')  # PX4 owns all position/attitude/rate control loops
-    if sensor_config.get('flight_controller') == 'px4-native':
+    if sensor_config.get('flight_controller') == 'px4-native' and role != 'algorithms':
         if os.environ.get('FLYCO_ISAAC_EXTERNAL_NATIVE_MODE') != '1':
             mode = Node(package='flyco_real', executable='px4_bridge.py',
                 parameters=[{'simulation': True, 'use_sim_time': True, 'odom_topic': '/isaac/odom',
@@ -115,16 +120,16 @@ def generate_launch_description():
     if os.environ.get('FLYCO_ISAAC_NO_UI') == '1':
         omitted.add('prompt_ui')
     # RViz uses the project display configuration.
-    if os.environ.get('FLYCO_ISAAC_RVIZ') == '1':
+    if os.environ.get('FLYCO_ISAAC_RVIZ') == '1' and role != 'algorithms':
         actions.append(ExecuteProcess(cmd=['bash', str(root/'tools/run_rviz.sh')],
                                       output='screen'))
-    if 'sam_tracking' not in omitted:
+    if 'sam_tracking' not in omitted and role != 'sensors':
         actions.append(ExecuteProcess(cmd=[str(flyco_runtime/'venv/bin/python'),
             str(root/'bridge/perception_image.py')], output='screen'))
     nodes = []
     for spec in yaml.safe_load((source/'config/nodes.yaml').read_text()):
         name = spec['name']
-        if name in omitted:
+        if name in omitted or role == 'sensors':
             continue
         nodes.append(name)
         remaps = [tuple(pair) for pair in spec.get('remappings', [])]
@@ -151,7 +156,8 @@ def generate_launch_description():
                 actions.append(ExecuteProcess(cmd=command, output='screen'))
         if name != 'prompt_ui':
             critical.append(actions[-1])
-    (runtime/'algorithm_nodes.json').write_text(json.dumps(nodes, indent=2))
+    if role != 'sensors':
+        (runtime/'algorithm_nodes.json').write_text(json.dumps(nodes, indent=2))
     # A failed algorithm must stop the session; rendering alone is not success.
     for process in critical:
         actions.append(RegisterEventHandler(OnProcessExit(target_action=process,

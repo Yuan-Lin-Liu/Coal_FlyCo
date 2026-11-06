@@ -204,6 +204,38 @@ def test_native_executor_takeoff_returns_to_registered_mode(dds):
     assert not any(c.command == VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM for c in dds.requests)
 
 
+def test_auto_enable_waits_for_ready_and_reengages_only_after_position_switch(dds):
+    dds.bridge.settings['auto_enable'] = True
+    dds.bridge.auto_enable_pending = True
+    dds.live['ground'] = False
+    dds.spin(.5)
+    assert not dds.bridge.enabled
+    dds.live['ground'] = True
+    dds.spin(1.4)
+    assert dds.bridge.enabled and not dds.requests
+    dds.live['mode'] = VehicleStatus.NAVIGATION_STATE_AUTO_LOITER
+    dds.spin(.1)
+    dds.live['mode'] = VehicleStatus.NAVIGATION_STATE_POSCTL
+    dds.spin(.1)
+    assert not dds.bridge.auto_enable_pending
+    dds.live.update(armed=True, mode=23)
+    dds.spin(.1)
+    dds.live['valid'] = False
+    dds.spin(.1)
+    dds.live['valid'] = True
+    dds.spin(1.4)
+    assert not dds.bridge.enabled  # A fault does not recover silently in FlyCo.
+    dds.live['mode'] = VehicleStatus.NAVIGATION_STATE_POSCTL
+    dds.spin(1.4)
+    assert dds.bridge.enabled and not dds.requests
+    assert dds.service('enable', SetBool, False).success
+    dds.live['mode'] = 23
+    dds.spin(.1)
+    dds.live['mode'] = VehicleStatus.NAVIGATION_STATE_POSCTL
+    dds.spin(1.4)
+    assert not dds.bridge.enabled  # Explicit disable stays disabled.
+
+
 def test_small_explicit_heading_reset_reanchors_without_disabling(dds):
     import copy
     dds.engage()

@@ -25,6 +25,8 @@ def build(context):
         command += ['--px4-msgs-setup', arg('px4_msgs_setup')]
     if not enabled('start_mode'):
         command += ['--external-native-mode']
+    if not enabled('start_algorithms'):
+        command += ['--external-algorithms']
     for option, flag in (('qgc', '--qgc'), ('headless', '--headless')):
         if enabled(option):
             command.append(flag)
@@ -46,5 +48,6 @@ def generate_launch_description():
         DeclareLaunchArgument('rviz', default_value='true'),
         DeclareLaunchArgument('headless', default_value='false'),
         DeclareLaunchArgument('start_mode', default_value='false'),
+        DeclareLaunchArgument('start_algorithms', default_value='false'),
         OpaqueFunction(function=build),
     ])

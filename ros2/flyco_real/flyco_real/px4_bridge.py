@@ -7,7 +7,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy
 from nav_msgs.msg import Odometry
 from px4_msgs.msg import (TrajectorySetpoint, VehicleLocalPosition,
-                         VehicleStatus, VehicleCommand, VehicleCommandAck, ModeCompleted)
+                         VehicleStatus, VehicleCommand, VehicleCommandAck, ModeCompleted, VehicleLandDetected)
 from quadrotor_msgs.msg import PositionCommand, PolynomialTrajGroup
 from std_msgs.msg import String, Empty
 from std_srvs.srv import SetBool, Trigger
@@ -37,6 +37,8 @@ class PX4Bridge(Node):
             'max_yaw_rate': 1., 'max_position_error': 2.,
             'bounds_min': [-30., -30., -.5], 'bounds_max': [30., 30., 10.],
             'enable_control': False, 'ground_link_timeout': 5., 'first_command_timeout': 15.,
+            'auto_enable': False,
+            'land_state_timeout': 5.,
             'target_system': 0, 'target_component': 0, 'source_component': 191,
             'command_ack_timeout': 3.,
             'simulation': False,
@@ -68,6 +70,10 @@ class PX4Bridge(Node):
         self.takeoff_started = 0.
         self.takeoff_world_target = None
         self.estimator_reset = None
+        self.auto_enable_pending = bool(self.settings['auto_enable'])
+        self.auto_enable_inhibited = False
+        self.auto_enable_ready_since = None
+        self.land_detected = self.land_detected_rx = None
         prefix = self.settings['px4_topic_prefix']
         self.state_topic = topic(prefix, 'out', 'vehicle_status', VehicleStatus)
         self.local_topic = topic(prefix, 'out', 'vehicle_local_position', VehicleLocalPosition)
@@ -83,6 +89,9 @@ class PX4Bridge(Node):
         self.create_subscription(Odometry, self.settings['odom_topic'], self.on_odom, qos_profile_sensor_data)
         self.create_subscription(VehicleLocalPosition, self.local_topic, self.on_local, qos_profile_sensor_data)
         self.create_subscription(VehicleStatus, self.state_topic, self.on_state, qos_profile_sensor_data)
+        self.create_subscription(VehicleLandDetected,
+            topic(prefix, 'out', 'vehicle_land_detected', VehicleLandDetected), self.on_land_detected,
+            qos_profile_sensor_data)
         self.create_subscription(VehicleCommandAck, topic(prefix, 'out', 'vehicle_command_ack', VehicleCommandAck), self.on_ack, qos_profile_sensor_data)
         self.create_subscription(PositionCommand, self.settings['command_topic'], self.on_command, 10)
         self.create_subscription(PolynomialTrajGroup, '/local_newest_traj', self.on_trajectory, 10)
@@ -156,7 +165,22 @@ class PX4Bridge(Node):
 
     def on_state(self, msg):
         if self.state and msg.timestamp <= self.state.timestamp: return
+        previous = self.state
         self.state, self.state_rx = msg, time.monotonic()
+        if (self.settings['auto_enable'] and not self.auto_enable_inhibited and previous and
+                previous.nav_state != msg.nav_state and msg.nav_state == VehicleStatus.NAVIGATION_STATE_POSCTL):
+            # An explicit return to Position allows a new engagement. Sensor
+            # failures in FlyCo do not silently re-enable themselves.
+            self.auto_enable_pending = self.seen_flyco or not self.enabled
+            self.auto_enable_ready_since = None
+        if (previous and previous.nav_state != msg.nav_state and
+                msg.nav_state == self.flight_mode.mode_id and self.enabled and self.ready() and
+                self.takeoff_phase not in ('requested', 'climbing', 'returning')):
+            self.latch_hold('FlyCo selected; holding the current position')
+
+    def on_land_detected(self, msg):
+        if self.land_detected and msg.timestamp <= self.land_detected.timestamp: return
+        self.land_detected, self.land_detected_rx = msg, time.monotonic()
 
     def on_command(self, msg):
         if (msg.header.frame_id != self.settings['world_frame'] or
@@ -217,6 +241,8 @@ class PX4Bridge(Node):
     def enable(self, request, response):
         if not request.data:
             self.enabled = self.tracking = False
+            self.auto_enable_pending = False
+            self.auto_enable_inhibited = True
             self.reason = 'disabled by operator'
             response.success, response.message = True, self.reason
             return response
@@ -228,9 +254,12 @@ class PX4Bridge(Node):
             return response
         self.alignment = world_alignment(pose_matrix(self.odom.pose.pose), local_pose_enu(self.local))
         self.enabled, self.seen_flyco = True, False
+        self.auto_enable_pending = False
+        self.auto_enable_inhibited = False
+        self.auto_enable_ready_since = None
         self.enabled_at = time.monotonic()
         self.command = None
-        self.latch_hold('warmup hold; select FlyCo and arm explicitly before takeoff')
+        self.latch_hold('ready; normally arm on the ground in Position, then select FlyCo')
         response.success, response.message = True, self.reason
         return response
 
@@ -337,6 +366,19 @@ class PX4Bridge(Node):
 
     def tick(self):
         self.flight_mode.tick()
+        if self.auto_enable_pending and not self.enabled:
+            can_enable = (self.flight_mode.mode_id is not None and self.ready() and
+                fresh(self.ground_rx, time.monotonic(), self.settings['ground_link_timeout']) and
+                self.state.nav_state != self.flight_mode.mode_id and
+                (self.state.arming_state != VehicleStatus.ARMING_STATE_ARMED or
+                 self.state.nav_state == VehicleStatus.NAVIGATION_STATE_POSCTL))
+            if not can_enable:
+                self.auto_enable_ready_since = None
+            else:
+                if self.auto_enable_ready_since is None:
+                    self.auto_enable_ready_since = time.monotonic()
+                if time.monotonic()-self.auto_enable_ready_since >= self.settings['warmup_seconds']:
+                    self.enable(SetBool.Request(data=True), SetBool.Response())
         taking_off = self.takeoff_phase in ('requested', 'climbing', 'returning')
         if taking_off:
             owns = self.state and self.state.executor_in_charge == self.flight_mode.executor_id
@@ -425,8 +467,14 @@ class PX4Bridge(Node):
                  VehicleStatus.NAVIGATION_STATE_AUTO_LAND:'AUTO.LAND'}
         issue = self.px4_issue()
         value = json.dumps({'enabled':self.enabled,'tracking':self.tracking,
+            'auto_enable_pending': self.auto_enable_pending,
+            'landed': (bool(self.land_detected.landed) if self.land_detected and
+                       fresh(self.land_detected_rx, time.monotonic(), self.settings['land_state_timeout']) else None),
+            'mode_executor_active': bool(self.state and self.flight_mode.executor_id is not None and
+                                        self.state.executor_in_charge == self.flight_mode.executor_id),
             'endpoint_wait': self.endpoint_wait,
             'takeoff_phase': self.takeoff_phase, 'mode_executor_id': self.flight_mode.executor_id,
+            'takeoff_height': self.settings['takeoff_height'],
             'estimator_reset': self.estimator_reset,
             'mode': ('FlyCo' if self.flight_mode.mode_id is not None and self.state.nav_state == self.flight_mode.mode_id
                      else names.get(self.state.nav_state,'NAV_%d' % self.state.nav_state)) if self.state else 'unknown',

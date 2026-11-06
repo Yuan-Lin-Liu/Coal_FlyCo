@@ -75,6 +75,8 @@ def main():
     parser.add_argument('--px4-msgs-setup', default='', help='Matching PX4 message overlay for native-mode SITL')
     parser.add_argument('--external-native-mode', action='store_true',
                         help='Start the native mode separately with ros2 launch flyco_real mode.launch.py')
+    parser.add_argument('--external-algorithms', action='store_true',
+                        help='Start FlyCo algorithms separately with ros2 launch flyco_real flyco.launch.py')
     parser.add_argument('--qgc', action='store_true', help='Open QGroundControl with this session')
     parser.add_argument('--qgc-path', default=str(Path.home()/'QGroundControl-x86_64.AppImage'))
     parser.add_argument('--headless', action='store_true')
@@ -216,6 +218,7 @@ def main():
         FLYCO_ISAAC_FLIGHT_CONTROLLER=args.flight_controller,
         FLYCO_PX4_MSGS_SETUP=args.px4_msgs_setup,
         FLYCO_ISAAC_EXTERNAL_NATIVE_MODE=str(int(args.external_native_mode)),
+        FLYCO_ISAAC_STACK_ROLE='sensors' if args.external_algorithms else 'all',
         FLYCO_ISAAC_SEGMENTATION_BACKEND=args.segmentation_backend,
         FLYCO_ISAAC_SEGMENTATION_ENDPOINT=args.segmentation_endpoint)
     children = []
@@ -236,6 +239,8 @@ def main():
              'flyco_source': str(ROOT/'third_party/flyco_ros2'),
              'flyco_runtime': str(flyco_runtime), 'docker': args.docker,
              'flight_controller': args.flight_controller, 'px4_dir': str(px4_root) if px4_root else None,
+             'external_algorithms': args.external_algorithms,
+             'px4_msgs_setup': args.px4_msgs_setup,
              'segmentation_backend': args.segmentation_backend,
              'segmentation_endpoint': args.segmentation_endpoint}
     (run/'session.json').write_text(json.dumps(state, indent=2))
@@ -297,7 +302,8 @@ def main():
                 state['startup_failure'] = diagnostic['reason']
                 raise RuntimeError(diagnostic['message']+' See '+diagnostic['log_path'])
             time.sleep(.2)
-        print('煤仓场景已加载，正在启动 FlyCo ROS2 算法。', flush=True)
+        print('煤仓场景已加载，正在启动 ROS2 传感器桥；FlyCo 算法由终端 C 启动。'
+              if args.external_algorithms else '煤仓场景已加载，正在启动 FlyCo ROS2 算法。', flush=True)
         ros_log = (run/'ros.log').open('wb')
         ros_command = ['bash', str(ROOT/'tools/run_ros.sh')]
         if args.docker:

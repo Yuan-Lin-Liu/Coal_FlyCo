@@ -32,7 +32,8 @@ def start_px4(root, run, env):
         PX4_SYS_AUTOSTART='10015', PX4_PARAM_COM_RC_IN_MODE='4')
     if env.get('FLYCO_ISAAC_FLIGHT_CONTROLLER') == 'px4-native':
         px4_env.update(PX4_PARAM_UXRCE_DDS_DOM_ID=env['FLYCO_ISAAC_DOMAIN'],
-                       PX4_PARAM_UXRCE_DDS_SYNCT='0', ROS_DOMAIN_ID=env['FLYCO_ISAAC_DOMAIN'])
+                       PX4_PARAM_UXRCE_DDS_SYNCT='0', ROS_DOMAIN_ID=env['FLYCO_ISAAC_DOMAIN'],
+                       PX4_PARAM_COM_RC_IN_MODE='8')
     version = root/'build/px4_sitl_default/src/lib/version/build_git_version.h'
     (run/'px4_build.json').write_text(json.dumps({
         'root': str(root), 'binary': str(root/'build/px4_sitl_default/bin/px4'),

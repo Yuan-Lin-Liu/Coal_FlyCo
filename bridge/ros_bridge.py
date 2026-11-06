@@ -81,6 +81,8 @@ class Bridge(Node):
         self.pulses = []
         self.native_controls = {}
         if os.environ.get('FLYCO_ISAAC_FLIGHT_CONTROLLER') == 'px4-native':
+            from sim_manual import NeutralSimSticks
+            self.sim_sticks = NeutralSimSticks(self)
             self.native_controls = {action: self.create_client(Trigger, '/flyco/control/'+service)
                 for action, service in (('initial', 'takeoff'), ('hold', 'hold'), ('resume', 'resume'))}
         self.create_subscription(AttitudeTarget, '/setpoint_raw/attitude', self.on_control, qos)

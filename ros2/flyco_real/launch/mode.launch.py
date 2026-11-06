@@ -18,7 +18,8 @@ def build(context):
     prefix = settings.get('deployment', {}).get('px4_topic_prefix')
     if prefix:
         params['px4_topic_prefix'] = prefix
-    overrides = {'simulation': simulation, 'use_sim_time': simulation}
+    overrides = {'simulation': simulation, 'use_sim_time': simulation,
+                 'auto_enable': LaunchConfiguration('auto_enable').perform(context).lower() == 'true'}
     if simulation:
         overrides.update(odom_topic='/isaac/odom', bounds_min=[-32., -24., -.5],
                          bounds_max=[32., 24., 10.])
@@ -30,6 +31,7 @@ def generate_launch_description():
     share = Path(get_package_share_directory('flyco_real'))
     return LaunchDescription([
         DeclareLaunchArgument('simulation', default_value='false'),
+        DeclareLaunchArgument('auto_enable', default_value='true'),
         DeclareLaunchArgument('config', default_value=str(share/'config/odin.yaml')),
         OpaqueFunction(function=build),
     ])
