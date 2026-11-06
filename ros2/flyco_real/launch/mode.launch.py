@@ -22,7 +22,7 @@ def build(context):
                  'auto_enable': LaunchConfiguration('auto_enable').perform(context).lower() == 'true'}
     if simulation:
         overrides.update(odom_topic='/isaac/odom', bounds_min=[-32., -24., -.5],
-                         bounds_max=[32., 24., 10.])
+                         bounds_max=[32., 24., 10.], px4_local_timeout=1.)
     return [Node(package='flyco_real', executable='px4_bridge.py', name='px4_bridge',
                  parameters=[params, overrides], output='screen')]
 

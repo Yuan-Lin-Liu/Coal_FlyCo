@@ -112,6 +112,7 @@ def generate_launch_description():
         if os.environ.get('FLYCO_ISAAC_EXTERNAL_NATIVE_MODE') != '1':
             mode = Node(package='flyco_real', executable='px4_bridge.py',
                 parameters=[{'simulation': True, 'use_sim_time': True, 'odom_topic': '/isaac/odom',
+                             'px4_local_timeout': 1.,
                              'bounds_min': [-32., -24., -.5], 'bounds_max': [32., 24., 10.]}], output='screen')
             actions.append(mode)
             critical.append(mode)

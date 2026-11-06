@@ -53,6 +53,7 @@ class WarehousePX4Backend(PX4MavlinkBackend):
         self.ack = None
         self.setpoint_count = self.actuator_count = 0
         self.native_mode = False
+        self.last_safety_action = None
 
     @property
     def input_ref(self):
@@ -193,6 +194,10 @@ class WarehousePX4Backend(PX4MavlinkBackend):
                 self.heartbeat_wall = now
                 self.armed = bool(msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED)
                 self.px4_mode = {1: 'MANUAL', 2: 'ALTCTL', 3: 'POSCTL', 4: {2: 'TAKEOFF', 3: 'LOITER', 4: 'MISSION', 5: 'RTL', 6: 'LAND'}.get((msg.custom_mode >> 24) & 255, 'AUTO'), 6: 'OFFBOARD', 7: 'STABILIZED', 8: 'RATTITUDE'}.get((msg.custom_mode >> 16) & 255, 'UNKNOWN')
+                if (self.native_mode and self.armed and not was_armed and
+                        self.landing_state not in ('requested', 'descending')):
+                    self.landing_state = 'idle'
+                    self.last_safety_action = None
                 if self.px4_mode == 'LAND' and (previous == 'OFFBOARD' or
                         self.landing_state in ('requested', 'descending') or self.pending is None):
                     self.stop_tracking('')
@@ -229,6 +234,14 @@ class WarehousePX4Backend(PX4MavlinkBackend):
             self.link.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER,
                 mavutil.mavlink.MAV_AUTOPILOT_INVALID, 0, 0, 0)
             self.last_hb = now
+        # Indoor native SITL has no safe 30 m RTL climb. The independent
+        # MAVLink path can request Land even if the DDS control link is lost.
+        if (self.native_mode and self.armed and self.px4_mode == 'RTL' and
+                self.landing_state == 'idle'):
+            self.action('land')
+            self.last_safety_action = dict(action='Land', reason='RTL in warehouse native simulation',
+                                           sim_time=self.sim_time)
+            print('[PX4] Warehouse native simulation: RTL converted to Land', flush=True)
         if self.active and now-self.heartbeat_wall > 3.:
             self.stop_tracking('PX4 heartbeat lost; stopped Offboard stream')
         if self.active and self.offset is not None and now-self.last_send >= .02:
@@ -305,7 +318,8 @@ class WarehousePX4Backend(PX4MavlinkBackend):
             accept_trajectories=self.accept_trajectories, endpoint_wait=self.endpoint_wait,
             landing_state=self.landing_state, landing_complete=self.landing_state == 'complete',
             landed_state=self.landed_state,
-            setpoints=self.setpoint_count, actuator_messages=self.actuator_count, last_ack=self.ack)
+            setpoints=self.setpoint_count, actuator_messages=self.actuator_count, last_ack=self.ack,
+            last_safety_action=self.last_safety_action)
 
     def stop(self):
         self.link.close()

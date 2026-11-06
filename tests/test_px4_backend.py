@@ -65,6 +65,26 @@ def test_disabled_never_sends_setpoints_or_arms(backend):
     assert not any(k in ('target','command') for k,_ in link.calls)
 
 
+@pytest.mark.parametrize('native',[False,True])
+def test_warehouse_native_rtl_requests_land_once_without_arming(backend,native):
+    b,link=backend
+    b.native_mode=native
+    message=types.SimpleNamespace(base_mode=128,custom_mode=(4<<16)|(5<<24),
+        get_srcSystem=lambda:1,get_srcComponent=lambda:1,get_type=lambda:'HEARTBEAT')
+    link.messages.append(message)
+    b.update(.004)
+    link.messages.append(message)
+    b.update(.004)
+    calls=[args for kind,args in link.calls if kind=='command']
+    if native:
+        assert len(calls)==1 and calls[0][2]==21
+        assert b.landing_state=='requested'
+        assert b.telemetry()['last_safety_action']['action']=='Land'
+    else:
+        assert calls==[] and b.px4_mode=='RTL'
+    assert not any(args[2]==400 for args in calls)
+
+
 def test_enu_world_origin_and_yaw_conversion(backend):
     b, link = backend
     b.set_command(command())

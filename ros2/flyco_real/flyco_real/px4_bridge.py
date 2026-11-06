@@ -33,6 +33,7 @@ class PX4Bridge(Node):
             'odom_topic': '/flyco/odom', 'command_topic': '/planning/pos_cmd',
             'px4_topic_prefix': '/fmu', 'world_frame': 'world', 'rate': 50.,
             'odom_timeout': .3, 'state_timeout': 2., 'command_timeout': .3,
+            'px4_local_timeout': .3,
             'warmup_seconds': 1.2, 'max_speed': 1.5, 'max_acceleration': 3.,
             'max_yaw_rate': 1., 'max_position_error': 2.,
             'bounds_min': [-30., -30., -.5], 'bounds_max': [30., 30., 10.],
@@ -70,6 +71,7 @@ class PX4Bridge(Node):
         self.takeoff_started = 0.
         self.takeoff_world_target = None
         self.estimator_reset = None
+        self.last_control_fault = None
         self.auto_enable_pending = bool(self.settings['auto_enable'])
         self.auto_enable_inhibited = False
         self.auto_enable_ready_since = None
@@ -119,7 +121,7 @@ class PX4Bridge(Node):
         # SITL without XRCE time sync has a sensor clock whose epoch differs
         # from Isaac /clock. Receive-age checks still enforce link freshness.
         if self.settings['simulation'] and self.local is not None:
-            return self.local.timestamp*1.e-6
+            return max(self.local.timestamp, self.state.timestamp if self.state else 0)*1.e-6
         return self.now()
 
     def on_odom(self, msg):
@@ -213,9 +215,11 @@ class PX4Bridge(Node):
             return 'PX4 failsafe is active'
         if not fresh(self.state.timestamp * 1.e-6, self.px4_now(), self.settings['state_timeout']):
             return 'PX4 status clock is not synchronized with ROS'
-        if not self.local or not fresh(self.local_rx, time.monotonic(), self.settings['odom_timeout']):
+        if not self.local or self.local_rx is None:
             return 'waiting for ' + self.local_topic
-        if not fresh(self.local.timestamp * 1.e-6, self.px4_now(), self.settings['odom_timeout']):
+        if not fresh(self.local_rx, time.monotonic(), self.settings['px4_local_timeout']):
+            return 'PX4 local position receive timeout (> %.3fs)' % self.settings['px4_local_timeout']
+        if not fresh(self.local.timestamp * 1.e-6, self.px4_now(), self.settings['px4_local_timeout']):
             return 'PX4 local position clock is not synchronized with ROS'
         # PX4's registered attitude/local-position mode requirements own EKF
         # arming and in-flight health checks. heading_good_for_control is an
@@ -259,6 +263,7 @@ class PX4Bridge(Node):
         self.auto_enable_ready_since = None
         self.enabled_at = time.monotonic()
         self.command = None
+        self.last_control_fault = None
         self.latch_hold('ready; normally arm on the ground in Position, then select FlyCo')
         response.success, response.message = True, self.reason
         return response
@@ -403,8 +408,26 @@ class PX4Bridge(Node):
             self.land_pending = None
             self.land_result = 'ack timeout; inspect PX4 mode'
         if self.enabled and not self.ready():
+            cause = self.px4_issue() or 'FlyCo odometry lost or stale'
+            now = time.monotonic()
+            self.last_control_fault = dict(reason=cause, ros_time=self.now(), action='PX4 failsafe',
+                odom_receive_age=now-self.odom_rx if self.odom_rx is not None else None,
+                px4_local_receive_age=now-self.local_rx if self.local_rx is not None else None,
+                px4_local_timeout=self.settings['px4_local_timeout'],
+                px4_state_receive_age=now-self.state_rx if self.state_rx is not None else None)
+            if (self.settings['simulation'] and self.state and not self.state.failsafe and
+                    self.state.arming_state == VehicleStatus.ARMING_STATE_ARMED and
+                    self.state.executor_in_charge == self.flight_mode.executor_id and
+                    self.state.nav_state in (self.flight_mode.mode_id, VehicleStatus.NAVIGATION_STATE_AUTO_TAKEOFF)):
+                if not self.land_pending:
+                    response = self.land(Trigger.Request(), Trigger.Response())
+                    if response.success:
+                        self.last_control_fault['action'] = 'warehouse simulation Land requested'
+                if taking_off:
+                    self.takeoff_phase = 'failed'
+                    taking_off = False
             self.enabled = False
-            self.latch_hold('state/odometry lost; FlyCo output stopped')
+            self.latch_hold('control stopped: '+cause)
         if self.enabled and self.seen_flyco and not self.armed_flyco() and not taking_off:
             self.enabled = False
             self.latch_hold('PX4 left armed FlyCo; enable again after inspection')
@@ -476,6 +499,7 @@ class PX4Bridge(Node):
             'takeoff_phase': self.takeoff_phase, 'mode_executor_id': self.flight_mode.executor_id,
             'takeoff_height': self.settings['takeoff_height'],
             'estimator_reset': self.estimator_reset,
+            'last_control_fault': self.last_control_fault,
             'mode': ('FlyCo' if self.flight_mode.mode_id is not None and self.state.nav_state == self.flight_mode.mode_id
                      else names.get(self.state.nav_state,'NAV_%d' % self.state.nav_state)) if self.state else 'unknown',
             'registered_mode_id': self.flight_mode.mode_id, 'registration_issue': self.flight_mode.error,

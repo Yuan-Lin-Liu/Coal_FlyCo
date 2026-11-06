@@ -180,6 +180,8 @@ ros2 run flyco_real task.py land --sim
 ros2 run flyco_real task.py status
 ```
 
+原生仓库仿真将 PX4 本地位置遥测接收超时与机体定位超时分开：PX4 本地遥测允许 1 秒以内延迟，机体定位和指令仍使用各自门限。持续数据失效时停止控制并请求降落；若 PX4 已切 RTL，仿真通过独立 MAVLink 请求就地 Land，避免默认返航先爬升 30 米。诊断保存在控制状态的 `last_control_fault` 和仿真状态的 `last_safety_action` 中。该室内策略仅作用于原生 SITL，真机仍需单独配置和验收 PX4 失效策略。
+
 降落时 QGC 显示 Land。确认实际落地、上锁、停桨后，再结束 C、A、B；控制状态见 `/flyco/control/status`，任务状态见 `/flyco/mission/status`。原生模式名称以 QGC 和控制节点为准，Isaac 面板可能概括显示 AUTO。
 
 旧 Python 仿真入口保留；`simulation.launch.py start_mode:=true start_algorithms:=true` 可恢复内置控制与算法，此时不要再运行终端 B/C。

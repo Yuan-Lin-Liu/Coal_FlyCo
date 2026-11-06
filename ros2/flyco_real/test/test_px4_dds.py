@@ -236,6 +236,35 @@ def test_auto_enable_waits_for_ready_and_reengages_only_after_position_switch(dd
     assert not dds.bridge.enabled  # Explicit disable stays disabled.
 
 
+def test_simulated_local_feedback_gap_then_loss_requests_one_land(dds):
+    dds.bridge.settings.update(simulation=True, px4_local_timeout=1.)
+    dds.engage()
+    dds.live['local'] = False
+    dds.spin(.45)
+    assert dds.bridge.enabled and not dds.requests
+    dds.live['local'] = True
+    dds.spin(.1)
+    dds.live['local'] = False
+    dds.spin(1.15)
+    assert not dds.bridge.enabled
+    assert len(dds.requests) == 1 and dds.requests[0].command == VehicleCommand.VEHICLE_CMD_NAV_LAND
+    assert 'receive timeout' in dds.bridge.last_control_fault['reason']
+    assert dds.bridge.last_control_fault['px4_local_receive_age'] >= 1.
+    assert dds.bridge.last_control_fault['action'] == 'warehouse simulation Land requested'
+    dds.live['local'] = True
+    dds.spin(.4)
+    assert len(dds.requests) == 1 and not dds.bridge.enabled
+
+
+def test_hardware_local_feedback_timeout_keeps_fcu_failsafe_policy(dds):
+    dds.engage()
+    dds.live['local'] = False
+    dds.spin(.45)
+    assert not dds.bridge.enabled and not dds.requests
+    assert dds.bridge.settings['px4_local_timeout'] == .3
+    assert dds.bridge.last_control_fault['action'] == 'PX4 failsafe'
+
+
 def test_small_explicit_heading_reset_reanchors_without_disabling(dds):
     import copy
     dds.engage()
