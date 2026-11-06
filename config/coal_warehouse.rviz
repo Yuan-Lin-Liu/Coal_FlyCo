@@ -153,7 +153,7 @@ Visualization Manager:
       Namespaces: {}
       Value: true
       Topic:
-        Value: /traj_server/fov_vis
+        Value: /flyco/camera/fov
         Depth: 5
         History Policy: Keep Last
         Reliability Policy: Reliable

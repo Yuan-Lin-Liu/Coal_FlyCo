@@ -149,6 +149,20 @@ ros2 launch flyco_real flyco.launch.py simulation:=true
 
 QGC 应显示 Position → FlyCo → Takeoff → FlyCo，RViz 中无人机上升、悬停。起飞只在“地面已解锁”的 Position → FlyCo 切换后触发一次；启动 C 时已在 FlyCo、未解锁、落地状态未知或空中切模式均不自动起飞。PX4 内置 Takeoff 完成返回 FlyCo 不会再次触发起飞。
 
+需要文字窗口时，可以独立打开，不用重启 A/B/C：
+
+```bash
+ros2 launch flyco_real prompt.launch.py simulation:=true
+```
+
+窗口名为 **FlyCo-UI**，点击底部 Text 输入框编辑英文描述，点击 **Send text** 或按 Enter 发送。也可在启动 C 时增加 `ui:=true`。文字发送与自动起飞相互独立。
+
+RViz 的 **Camera field of view** 使用 `/flyco/camera/fov`，由相机内参和实际光学坐标 TF 绘制；起飞前和悬停时也能显示红色视锥，无需先产生规划轨迹。已打开的旧 RViz 可直接将该显示项的 Topic 改为此话题。临时独立启动视锥节点：
+
+```bash
+ros2 run flyco_real camera_fov.py --ros-args -p simulation:=true -p use_sim_time:=true
+```
+
 悬停后，若需要继续扫描，在另一个已加载环境的终端发送文字；等待 RViz 出现目标点云及预测网格，再逐条激活规划和扫描：
 
 ```bash

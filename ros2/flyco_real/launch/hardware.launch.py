@@ -52,6 +52,7 @@ def build(context):
                       parameters=[str(params)], output='screen')
         actions.append(sensor)
         critical.append(sensor)
+        actions.append(Node(package='flyco_real', executable='camera_fov.py', output='screen'))
     else:
         actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share / 'launch/native.launch.py')),
             launch_arguments={**common, 'role': 'onboard', 'runtime_root': str(run / 'algorithm'),

@@ -114,6 +114,8 @@ ros2 launch flyco_real flyco.launch.py config:="$PWD/config/vehicle.odin.local.y
 
 等待机载终端出现 `FlyCo ready`，确认定位和地面预测链路正常。在地面以 **Position** 模式正常解锁，然后通过 RC/QGC 切换到 **FlyCo**。任务节点自动调度 PX4 内置 Takeoff，升至距本次地面位置约 2 m 后返回 FlyCo 悬停。起飞只触发一次；空中切模式、未解锁或落地状态未知时不自动起飞。
 
+需要单独打开文字输入窗口时，在地面电脑执行 `ros2 launch flyco_real prompt.launch.py`，在 **FlyCo-UI** 底部 Text 输入英文描述，点击 **Send text** 发送。已有地面 UI 时不重复打开。
+
 起飞悬停后发送目标文字，等待目标点云及预测网格，再激活规划和扫描：
 
 ```bash
@@ -135,7 +137,7 @@ ros2 run flyco_real task.py status
 
 ## 5. 地面 RViz2 与核心排查
 
-地面 `ground.launch.py rviz:=true` 自动载入真机配置，固定坐标系为 `world`，观察机体姿态、点云、图像、预测和轨迹。手动打开时：
+地面 `ground.launch.py rviz:=true` 自动载入真机配置，固定坐标系为 `world`，观察机体姿态、点云、图像、预测和轨迹。红色相机视锥由 `/flyco/camera/fov` 根据实际标定和光学坐标 TF 显示，独立于是否已生成轨迹。手动打开时：
 
 ```bash
 ros2 run rviz2 rviz2 -d "$PWD/ros2/flyco_real/config/flyco_real.rviz"

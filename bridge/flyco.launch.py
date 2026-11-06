@@ -102,6 +102,9 @@ def generate_launch_description():
         actions.append(ExecuteProcess(cmd=['/usr/bin/python3', str(root/'bridge/ros_bridge.py')],
                                       output='screen'))
     critical = actions[:]
+    if role != 'algorithms':
+        actions.append(ExecuteProcess(cmd=['/usr/bin/python3', str(root/'bridge/camera_fov.py'),
+            '--ros-args', '-p', 'simulation:=true', '-p', 'use_sim_time:=true'], output='screen'))
     omitted = set()
     if sensor_config.get('flight_controller') in ('px4', 'px4-native'):
         omitted.add('px4ctrl')  # PX4 owns all position/attitude/rate control loops

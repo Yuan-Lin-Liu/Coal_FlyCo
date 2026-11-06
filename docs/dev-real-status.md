@@ -48,3 +48,10 @@
 - 真实 SITL 会话 `run-20261106-134009-29dec4` 的 `automatic-takeoff-verification.json` 为 SUCCESS。`automatic-takeoff-audit.json` 核对 ULog：Position 2 → FlyCo 23 → Takeoff 17 → FlyCo 23 → Land 18；全程没有 Offboard，只有一次 Takeoff 和一次自动起飞请求。
 - 最高世界高度 2.051 m（地面约 0.062 m），最终落地上锁、四电机输出为零；悬停后未重复爬升。没有重复完整扫描。
 - 原生 SITL 提供明确优先级的中立虚拟摇杆，满足 Position 正常解锁条件，避免已打开 QGC 的虚拟摇杆与仿真输入交替触发接管；只修改会话内 PX4 参数，真机仍使用真实遥控器。两次修正前的失败记录保留在先前会话中。
+
+## 相机视锥和文字窗口
+
+- 原红色视锥 `/traj_server/fov_vis` 由轨迹服务器收到轨迹后才发布；PX4 原生起飞不产生该轨迹，因此出现悬停时没有视锥的问题。
+- 新增独立 `camera_fov.py`，通过实际 CameraInfo 和最新光学坐标 TF 发布 `/flyco/camera/fov`，不依赖规划轨迹；TF 失效后删除标记。仿真传感器入口和真机传感器入口自动启动，RViz 配置同步更新。
+- 当前会话 `run-20261106-142129-c50a47` 只读验证得到 14 条红色视锥消息，光学坐标系正确，包含 16 个线段端点；结果见 `camera-fov-verification.json`。没有重跑飞行测试或重启飞行控制节点。
+- `ros2 launch flyco_real prompt.launch.py simulation:=true` 可独立打开 FlyCo-UI，当前桌面已确认窗口显示；英文描述通过底部 Text / Send text 或 Enter 发送。命令行 `task.py text ... --sim` 继续可用。

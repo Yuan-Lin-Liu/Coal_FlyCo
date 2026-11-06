@@ -44,6 +44,8 @@ def build(context):
     if role == 'onboard':
         if LaunchConfiguration('start_sensor_bridge').perform(context).lower() == 'true':
             node('flyco_real', 'sensor_bridge.py', 'sensor_bridge')
+            fov = node('flyco_real', 'camera_fov.py', 'camera_fov')
+            critical.remove(fov)
         if LaunchConfiguration('start_mode').perform(context).lower() == 'true':
             node('flyco_real', 'px4_bridge.py', 'px4_bridge')
         flyco('flyco_planner')

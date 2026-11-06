@@ -7,7 +7,7 @@ from scipy.spatial.transform import Rotation
 import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy
 from geometry_msgs.msg import TransformStamped, QuaternionStamped
 from airsim_ros_pkgs.msg import GimbalAngleEulerCmd
 from nav_msgs.msg import Odometry
@@ -70,7 +70,8 @@ class SensorBridge(Node):
         self.ev_pub = self.create_publisher(VehicleOdometry,
             topic(param('px4_topic_prefix', '/fmu'), 'in', 'vehicle_visual_odometry', VehicleOdometry), 1) if self.publish_ev else None
         self.image_pub = self.create_publisher(Image, '/flyco/camera/rgb', 2)
-        self.info_pub = self.create_publisher(CameraInfo, '/flyco/camera/info', 2)
+        self.info_pub = self.create_publisher(CameraInfo, '/flyco/camera/info',
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.create_subscription(Odometry, param('odom_topic', '/Odometry'), self.on_odom, qos_profile_sensor_data)
         self.create_subscription(PointCloud2, param('cloud_topic', '/cloud_registered'), self.on_cloud, qos_profile_sensor_data)
         self.create_subscription(Image, param('image_topic', '/camera/color/image_rect'), self.on_image, qos_profile_sensor_data)
