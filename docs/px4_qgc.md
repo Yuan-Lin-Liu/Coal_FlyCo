@@ -96,28 +96,77 @@ PX4 参数、飞行日志存于本次 `runtime/run-*/px4/`；`px4_build.json` �
 
 原自定义控制路径仍可用：`./launch_warehouse.sh --flight-controller flyco --scene 4`。Docker 入口默认沿用该路径；本次 PX4/QGC 联动使用宿主机原生环境。
 
-## 原生 FlyCo 模式仿真
+## 原生 FlyCo 模式仿真：ROS2 终端入口
 
-先按 [部署说明](deploy_orin.md) 的地面命令编译 `flyco_real`，准备 `MicroXRCEAgent` 和与固件匹配的消息。沿用本机已有 Isaac/FlyCo 模型环境：
+本机已编译；代码更新后仅更新入口包：
 
 ```bash
-python3 launch.py start --flight-controller px4-native --qgc \
-  --px4-msgs-setup /实际匹配消息安装目录/share/px4_msgs/local_setup.bash
+cd /home/robot/coal_flyco
+source /opt/ros/humble/setup.bash
+COLCON_DEFAULTS_FILE="$PWD/config/colcon_ground.yaml" colcon --log-base runtime/native/ground/log build --packages-select flyco_real
 ```
 
-官方 v1.16 固件使用仓库消息时可省略覆盖层参数；本机定制固件必须指定自己的消息。该入口自动启动 UDP Agent，并关闭旧起飞轨迹和 Offboard 控制器。操作使用 [部署说明的控制服务](deploy_orin.md#4-飞行操作)：使能、在 QGC 选择 FlyCo 并正常解锁，然后调用 takeoff。仿真定位话题为 `/isaac/odom`，终端 `task.py` 命令需追加 `--ros-args -r /flyco/odom:=/isaac/odom -p use_sim_time:=true`。Isaac 的 Initial/Hold/Resume 按钮会转发原生服务；服务拒绝时不会自动解锁。
-
-需要自动验收时，在另一个终端：
+每个终端先执行：
 
 ```bash
+cd /home/robot/coal_flyco
 source /opt/ros/humble/setup.bash
 source runtime/native/ground/install/local_setup.bash
-source /实际匹配消息安装目录/share/px4_msgs/local_setup.bash
-export ROS_DOMAIN_ID=64 ROS_LOCALHOST_ONLY=0
-/usr/bin/python3 tools/verify_native_mode.py
+source /home/robot/px4_slam_ws/install/px4_msgs/share/px4_msgs/local_setup.bash
+export ROS_DOMAIN_ID=64 ROS_LOCALHOST_ONLY=0 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ```
 
-此脚本仅允许附着活动的 `px4-native` SITL 会话，会正常解锁，检查预测、完整扫描、降落停桨并结束会话。成功记录为 `runtime/latest/native-mode-verification.json`。真机入口不会自动解锁。
+最后一个覆盖层对应本机定制 PX4；其他机器改为实际固件匹配的消息。先关闭旧 QGC，再启动：
+
+**终端 A：仿真、PX4、QGC、RViz 与算法**：
+
+```bash
+ros2 launch flyco_real simulation.launch.py \
+  px4_msgs_setup:=/home/robot/px4_slam_ws/install/px4_msgs/share/px4_msgs/local_setup.bash
+```
+
+默认 `start_mode:=false`，因此此时尚未注册 FlyCo；Agent 自动启动。此入口复用已验证的仿真管理器和正常降落退出流程，默认加载完整感知、规划及 RViz。
+
+**终端 B：模式注册与持续控制节点**：
+
+```bash
+ros2 launch flyco_real mode.launch.py simulation:=true
+```
+
+节点保持运行，DDS 就绪后自动注册模式、健康检查和执行器；QGC 中随后出现 FlyCo。不要再启动第二个相同控制节点。也可用 `ros2 run flyco_real px4_bridge.py --ros-args -p simulation:=true -p use_sim_time:=true -p odom_topic:=/isaac/odom` 单独运行；launch 入口额外设置了本场景边界。
+
+**终端 C：逐条运行任务**：
+
+```bash
+ros2 run flyco_real task.py status
+ros2 run flyco_real task.py initialize --sim
+ros2 run flyco_real task.py enable --sim
+ros2 run flyco_real task.py select-mode --sim
+ros2 run flyco_real task.py arm --sim
+ros2 run flyco_real task.py takeoff --sim
+```
+
+等待 RViz 点云、定位有效后初始化；模式就绪后再选择和正常解锁。QGC 应显示 FlyCo → Takeoff → FlyCo，RViz 中飞机上升至约 2 m 并悬停。`--sim` 自动使用 `/isaac/odom` 和 `/clock`。
+
+悬停后发送文字，等待 RViz 出现目标点云和预测网格，再逐条执行规划、扫描：
+
+```bash
+ros2 run flyco_real task.py text 'A single large pile of black coal.' --sim
+ros2 run flyco_real task.py enable-planning --sim
+ros2 run flyco_real task.py scan --sim
+```
+
+扫描期间 QGC 显示 FlyCo，RViz 显示扫描轨迹。需要时执行以下相应动作，暂停与恢复不会改名为 PX4 的 Hold 模式：
+
+```bash
+ros2 run flyco_real task.py hold --sim
+ros2 run flyco_real task.py resume --sim
+ros2 run flyco_real task.py land --sim
+```
+
+降落时 QGC 显示 Land；确认实际落地、上锁、停桨后，在终端 A Ctrl+C，再在终端 B Ctrl+C。控制状态用 `ros2 run flyco_real task.py status` 查看。原生模式名称以 QGC 和控制节点状态为准，Isaac 面板可能概括显示为 AUTO。
+
+旧 Python 仿真入口仍可用，默认会内置模式节点；通过 `--external-native-mode` 可改为独立模式节点。`simulation.launch.py start_mode:=true` 也可选择内置模式节点，此时不再运行终端 B。
 
 ## 本机验收记录（2026-11-06）
 

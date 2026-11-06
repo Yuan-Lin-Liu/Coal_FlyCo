@@ -46,7 +46,7 @@ class PX4Bridge(Node):
             if not self.has_parameter(key): self.declare_parameter(key, default)
             self.settings[key] = self.get_parameter(key).value
         if self.settings['enable_control']:
-            raise ValueError('Use /flyco/control/enable; startup cannot engage control')
+            raise ValueError('Use task.py enable; startup cannot engage control')
         if self.settings['rate'] < 10. or self.settings['warmup_seconds'] < 1.:
             raise ValueError('FlyCo requires at least 10 Hz output and one second of warmup')
         if (len(self.settings['bounds_min']) != 3 or len(self.settings['bounds_max']) != 3 or
@@ -230,7 +230,7 @@ class PX4Bridge(Node):
         self.enabled, self.seen_flyco = True, False
         self.enabled_at = time.monotonic()
         self.command = None
-        self.latch_hold('warmup hold; arm/select FlyCo using RC/QGC, then resume')
+        self.latch_hold('warmup hold; select FlyCo and arm explicitly before takeoff')
         response.success, response.message = True, self.reason
         return response
 
@@ -282,7 +282,7 @@ class PX4Bridge(Node):
     def resume(self, request, response):
         if not (self.enabled and self.ready() and self.armed_flyco() and
                 time.monotonic() - self.enabled_at >= self.settings['warmup_seconds']):
-            response.success, response.message = False, 'Enable and warm up; arm/select FlyCo using RC/QGC first'
+            response.success, response.message = False, 'Enable and warm up; select FlyCo and arm explicitly first'
             return response
         if not fresh(self.ground_rx, time.monotonic(), self.settings['ground_link_timeout']):
             response.success, response.message = False, 'Ground heartbeat is missing'

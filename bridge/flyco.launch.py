@@ -101,12 +101,15 @@ def generate_launch_description():
     if sensor_config.get('flight_controller') in ('px4', 'px4-native'):
         omitted.add('px4ctrl')  # PX4 owns all position/attitude/rate control loops
     if sensor_config.get('flight_controller') == 'px4-native':
-        actions.append(Node(package='flyco_real', executable='px4_bridge.py',
-            parameters=[{'simulation': True, 'use_sim_time': True, 'odom_topic': '/isaac/odom',
-                         'bounds_min': [-32., -24., -.5], 'bounds_max': [32., 24., 10.]}], output='screen'))
+        if os.environ.get('FLYCO_ISAAC_EXTERNAL_NATIVE_MODE') != '1':
+            mode = Node(package='flyco_real', executable='px4_bridge.py',
+                parameters=[{'simulation': True, 'use_sim_time': True, 'odom_topic': '/isaac/odom',
+                             'bounds_min': [-32., -24., -.5], 'bounds_max': [32., 24., 10.]}], output='screen')
+            actions.append(mode)
+            critical.append(mode)
         actions.append(Node(package='flyco_real', executable='task.py', name='ground_heartbeat',
                             parameters=[{'heartbeat': True}], output='screen'))
-        critical.extend(actions[-2:])
+        critical.append(actions[-1])
     if os.environ.get('FLYCO_ISAAC_NO_PERCEPTION') == '1':
         omitted.update(('sam_tracking', 'tracking_prompt', 'sam_tracking_node', 'mesh_predict_node'))
     if os.environ.get('FLYCO_ISAAC_NO_UI') == '1':

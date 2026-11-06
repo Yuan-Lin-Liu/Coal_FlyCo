@@ -54,7 +54,8 @@ def build(context):
         critical.append(sensor)
     else:
         actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share / 'launch/native.launch.py')),
-            launch_arguments={**common, 'role': 'onboard', 'runtime_root': str(run / 'algorithm')}.items()))
+            launch_arguments={**common, 'role': 'onboard', 'runtime_root': str(run / 'algorithm'),
+                              'start_mode': LaunchConfiguration('start_mode').perform(context)}.items()))
     for process in critical:
         actions.append(RegisterEventHandler(OnProcessExit(target_action=process,
             on_exit=[EmitEvent(event=Shutdown(reason='Odin sensor provider exited'))])))
@@ -69,6 +70,7 @@ def generate_launch_description():
         DeclareLaunchArgument('config', default_value=str(share / 'config/odin.yaml')),
         DeclareLaunchArgument('runtime_root', default_value=str(Path.home() / '.ros/coal-flyco')),
         DeclareLaunchArgument('start_driver', default_value='true'),
+        DeclareLaunchArgument('start_mode', default_value='true'),
         DeclareLaunchArgument('ui', default_value='false'),
         OpaqueFunction(function=build),
     ])

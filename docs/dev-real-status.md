@@ -31,3 +31,11 @@
 按论文 §7.1.1，地面运行预测，Orin 运行其余算法；地面 launch 默认包含 RViz，语义服务在 Orin。运行顺序和依赖见 [部署说明](deploy_orin.md)。
 
 本机未连接 Orin/Odin/PX4 真机，尚无 ARM64 编译、设备在线标定、双机无线网络负载和硬件实飞证据。ARM SDK 与目标架构构建路径已交付，以上项目留待硬件验收。`dev-real` 为本地分支，尚未推送远端。
+
+## ROS2 终端入口更新
+
+- `simulation.launch.py` 启动仿真环境，默认不内置控制节点；`mode.launch.py simulation:=true` 在另一个终端启动常驻模式节点，自动注册 FlyCo。
+- `task.py` 新增 enable/disable、select-mode、arm、takeoff、hold/resume、land、status；全部任务可使用 `ros2 run`。`--sim` 自动适配 Isaac 定位和仿真时间。
+- 只更新构建 `flyco_real`，4 项新增 ROS2 任务检查通过，涵盖服务拒绝反馈、无定位时仍能请求降落、动态模式 ID、正常解锁消息与状态确认、仿真 Joy 释放及文字发送。修复测试数组比较后只重跑该失败用例。
+- 新入口完成命令发现、参数解析、临时空管理器启动退出及独立模式节点启动退出检查。模式配置会提取节点参数，避免将混合设备配置直接作为 ROS 参数文件。
+- 本次没有重跑完整扫描；原闭环飞行证据仍见上表。入口检查日志位于 `runtime/ros2-entrypoint-check/`。

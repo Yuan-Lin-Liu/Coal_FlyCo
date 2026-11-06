@@ -44,7 +44,8 @@ def build(context):
     if role == 'onboard':
         if LaunchConfiguration('start_sensor_bridge').perform(context).lower() == 'true':
             node('flyco_real', 'sensor_bridge.py', 'sensor_bridge')
-        node('flyco_real', 'px4_bridge.py', 'px4_bridge')
+        if LaunchConfiguration('start_mode').perform(context).lower() == 'true':
+            node('flyco_real', 'px4_bridge.py', 'px4_bridge')
         flyco('flyco_planner')
         flyco('traj_server')
         flyco('sam_tracking_node')
@@ -71,6 +72,7 @@ def generate_launch_description():
         DeclareLaunchArgument('runtime_root', default_value=str(Path.home() / '.ros/coal-flyco')),
         DeclareLaunchArgument('ui', default_value='false'),
         DeclareLaunchArgument('start_sensor_bridge', default_value='true'),
+        DeclareLaunchArgument('start_mode', default_value='true'),
         DeclareLaunchArgument('python_executable', default_value=''),
         OpaqueFunction(function=build),
     ])

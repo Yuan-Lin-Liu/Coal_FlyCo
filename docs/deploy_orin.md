@@ -94,39 +94,39 @@ ros2 launch flyco_real ground.launch.py config:="$PWD/config/vehicle.odin.local.
   model_python:=/实际地面模型环境/bin/python models_dir:=/实际权重目录 rviz:=true
 ```
 
-**Orin 终端 D：其余机载算法与 FlyCo 模式**：
+**Orin 终端 D：机载算法**：
 
 ```bash
-ros2 launch flyco_real native.launch.py role:=onboard start_sensor_bridge:=false \
+ros2 launch flyco_real native.launch.py role:=onboard start_sensor_bridge:=false start_mode:=false \
   config:="$PWD/config/vehicle.odin.local.yaml"
 ```
 
-`start_sensor_bridge:=false` 复用终端 B 的定位桥。若希望驱动与全部算法统一启动，可改用 `hardware.launch.py role:=onboard`，并停止终端 B，避免重复发布。
+**Orin 终端 E：FlyCo 模式节点**：
+
+```bash
+ros2 launch flyco_real mode.launch.py config:="$PWD/config/vehicle.odin.local.yaml"
+```
+
+模式节点启动后自动向 PX4 注册 FlyCo，QGC 随后显示该模式。节点保持运行；注册本身不需要调用服务。
+
+`start_sensor_bridge:=false` 复用终端 B 的定位桥，`start_mode:=false` 将模式节点留给终端 E 单独启动。若希望驱动与全部算法统一启动，可改用 `hardware.launch.py role:=onboard`，并停止终端 B 和 E，避免重复启动定位桥和模式节点。
 
 ## 4. 飞行操作
 
-先查看一次汇总状态：
+日常操作统一使用任务节点；`mode.launch.py` 负责注册和持续控制，`task.py` 负责一次操作后退出：
 
 ```bash
-ros2 topic echo /flyco/control/status --once --qos-durability transient_local
-```
-
-应有有效的定位、PX4、地面心跳，以及 `registered_mode_id`。FlyCo 向 PX4 注册真实外部模式，由 PX4 发布可用模式给 QGC；不会覆盖或重命名 Offboard。
-
-```bash
+ros2 run flyco_real task.py status
 ros2 run flyco_real task.py initialize
-ros2 service call /flyco/control/enable std_srvs/srv/SetBool '{data: true}'
+ros2 run flyco_real task.py enable
+ros2 run flyco_real task.py select-mode
+ros2 run flyco_real task.py arm
+ros2 run flyco_real task.py takeoff
 ```
 
-等待模式就绪，通过 RC/QGC 选择 **FlyCo** 并解锁，确认状态为 FlyCo、armed，再执行：
+先确认状态中的 `odom_ok`、`px4_ok`、`ground_ok` 均为 true。逐条执行并观察结果：`select-mode` 后 QGC 显示 FlyCo；`arm` 只请求正常解锁，受 PX4 预飞检查约束；`takeoff` 调度 PX4 内置 Takeoff，完成后返回 FlyCo 悬停。状态 `takeoff_phase: complete` 表示已返回。启动节点不会自动解锁。也可通过 RC/QGC 选择模式、正常解锁。
 
-```bash
-ros2 run flyco_real task.py initial-flight
-```
-
-该指令由 FlyCo 执行器调度 PX4 内置 Takeoff；起飞完成后自动返回 FlyCo 并保持。QGC 短暂显示 Takeoff 属于任务调度，扫描期间显示 FlyCo。状态 `takeoff_phase: complete` 表示已返回。
-
-起飞悬停后发送目标文字，等待点云和预测网格：
+起飞悬停后发送文字，等待目标点云及预测网格，再激活规划和扫描：
 
 ```bash
 ros2 run flyco_real task.py text '一个煤堆'
@@ -134,14 +134,15 @@ ros2 run flyco_real task.py enable-planning
 ros2 run flyco_real task.py scan
 ```
 
-需要暂停或降落：
+需要暂停、恢复或降落时：
 
 ```bash
-ros2 service call /flyco/control/hold std_srvs/srv/Trigger '{}'
-ros2 service call /flyco/control/land std_srvs/srv/Trigger '{}'
+ros2 run flyco_real task.py hold
+ros2 run flyco_real task.py resume
+ros2 run flyco_real task.py land
 ```
 
-暂停后以 `/flyco/control/resume`（`std_srvs/srv/Trigger`）显式恢复。服务成功表示请求发送；实际以模式、运动、落地和停桨为准。先落地停桨，再结束节点。真机入口不自动解锁。
+`initial-flight` 是 `takeoff` 的兼容别名。降落等动作返回成功表示请求已发送；实际以 QGC 模式、运动、落地和停桨为准。先落地停桨，再在各 launch 终端 Ctrl+C 结束节点。
 
 ## 5. 地面 RViz2 与核心排查
 

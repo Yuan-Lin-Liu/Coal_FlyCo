@@ -73,6 +73,8 @@ def main():
                         help='PX4 SITL (default) or legacy direct attitude adapter')
     parser.add_argument('--px4-dir', default=str(Path.home()/'PX4-Autopilot'))
     parser.add_argument('--px4-msgs-setup', default='', help='Matching PX4 message overlay for native-mode SITL')
+    parser.add_argument('--external-native-mode', action='store_true',
+                        help='Start the native mode separately with ros2 launch flyco_real mode.launch.py')
     parser.add_argument('--qgc', action='store_true', help='Open QGroundControl with this session')
     parser.add_argument('--qgc-path', default=str(Path.home()/'QGroundControl-x86_64.AppImage'))
     parser.add_argument('--headless', action='store_true')
@@ -213,6 +215,7 @@ def main():
         FLYCO_ISAAC_NO_UI=str(int(args.no_ui or args.headless)), FLYCO_ISAAC_RVIZ=str(int(rviz_enabled)),
         FLYCO_ISAAC_FLIGHT_CONTROLLER=args.flight_controller,
         FLYCO_PX4_MSGS_SETUP=args.px4_msgs_setup,
+        FLYCO_ISAAC_EXTERNAL_NATIVE_MODE=str(int(args.external_native_mode)),
         FLYCO_ISAAC_SEGMENTATION_BACKEND=args.segmentation_backend,
         FLYCO_ISAAC_SEGMENTATION_ENDPOINT=args.segmentation_endpoint)
     children = []
