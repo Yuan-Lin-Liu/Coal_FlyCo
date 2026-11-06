@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.16)
+project(flyco_real)
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+ament_python_install_package(${PROJECT_NAME})
+install(PROGRAMS scripts/px4_bridge.py scripts/sensor_bridge.py scripts/tracking_tf.py
+  scripts/task.py scripts/odin_adapter.py scripts/check_semantic.py DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(native_interfaces test TIMEOUT 90)
+endif()
+ament_package()

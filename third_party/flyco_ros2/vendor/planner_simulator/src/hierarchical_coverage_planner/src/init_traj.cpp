@@ -109,6 +109,17 @@ namespace flyco
     this->waypoints_.push_back(start_pose);
     this->indicators_.push_back(false);
 
+    if (flyco::parameter_or(node_, "flyco_planner.initial_vertical_relative", false))
+    {
+      Eigen::VectorXd top = start_pose;
+      const double height = flyco::parameter_or(node_, "flyco_planner.initial_height", 2.0);
+      if (!std::isfinite(height) || height <= 0.0 || height > 5.0)
+        throw std::runtime_error("initial_height must be in (0, 5] meters");
+      top(2) += height;
+      paths_[num_path_] = {top};
+      paths_indicators_[num_path_] = {false};
+    }
+
     // * Read Initial Waypoints
     this->waypoints_.insert(this->waypoints_.end(), this->paths_[this->num_path_].begin(), this->paths_[this->num_path_].end());
     this->indicators_.insert(this->indicators_.end(), this->paths_indicators_[this->num_path_].begin(), this->paths_indicators_[this->num_path_].end());
@@ -131,7 +142,7 @@ namespace flyco
       Eigen::VectorXd p2 = this->waypoints_[i+1];
 
       double dist = (p2.head(3) - p1.head(3)).norm();
-      int num = ceil(dist / 1.0);
+      int num = std::max(1, static_cast<int>(ceil(dist / 1.0)));
       double step = dist / num;
 
       vector<Eigen::VectorXd> piece_waypts;
@@ -210,6 +221,13 @@ namespace flyco
 
   void Init_Traj::readInitialPoints()
   {
+    if (flyco::parameter_or(node_, "flyco_planner.initial_vertical_relative", false))
+    {
+      paths_ = {vector<Eigen::VectorXd>()};
+      paths_indicators_ = {vector<bool>()};
+      path_size_ = 1;
+      return;
+    }
     string package_path = (ament_index_cpp::get_package_share_directory("flyco_ros2") + "/vendor/planner_simulator/src/flyco_planner_manager");
     string filename;
 
@@ -322,7 +340,7 @@ namespace flyco
     if (Joy) joy_msg = *Joy;
 
     // Button 'Y' to start initial trajectory generation
-    if (joy_msg.buttons[3] == true) 
+    if (joy_msg.buttons.size() > 3 && joy_msg.buttons[3] == true) 
     {
       this->start_gen_ = true;
       RCLCPP_INFO(rclcpp::get_logger("flyco.task_controls"), "[2 / Y] Initial flight requested.");

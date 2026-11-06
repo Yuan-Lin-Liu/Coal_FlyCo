@@ -34,7 +34,8 @@ import numpy as np
 import std_msgs.msg
 import flyco_common.geometry as tft
 import flyco_common.geometry as tft
-import torch
+from contextlib import ExitStack
+from functools import wraps
 from cv_bridge import CvBridge
 from geometry_msgs.msg import QuaternionStamped
 from image_geometry import PinholeCameraModel
@@ -61,6 +62,19 @@ import tf2_ros
 from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
 
 
+def model_inference_context(callback):
+    """Keep the HTTP client independent of Jetson Torch / CUDA wheels."""
+    @wraps(callback)
+    def run(self, *args, **kwargs):
+        with ExitStack() as stack:
+            if self.segmentation_backend.upper() in ('NATIVE', 'SAM2'):
+                import torch
+                stack.enter_context(torch.inference_mode())
+                stack.enter_context(torch.cuda.amp.autocast())
+            return callback(self, *args, **kwargs)
+    return run
+
+
 class SAMTrackingManager(Node):
     def __init__(self, node_name) -> None:
         super().__init__(node_name, automatically_declare_parameters_from_overrides=True)
@@ -74,6 +88,7 @@ class SAMTrackingManager(Node):
             backend=self.segmentation_backend,
             runtime_params=self.runtime_params,
             endpoint=parameter(self, "segmentation_endpoint", "http://127.0.0.1:8851"),
+            timeout=parameter(self, "segmentation_timeout", 30.0),
         )
         self.get_logger().info("Segmentation backend: %s" % ("Semantic Perception" if self.segmentation_backend.upper() in ("A", "SEMANTIC") else self.segmentation_backend))
         self._bridge = CvBridge()
@@ -569,12 +584,13 @@ class SAMTrackingManager(Node):
         return points
 
     def img_odom_callback(self, img_msg, odom_msg):
-        self.img_odom_data.append({"img": img_msg, "odom": odom_msg})
+        self.img_odom_data[:] = [{"img": img_msg, "odom": odom_msg}]
 
     def cloud_callback(self, cloud_msg):
         if len(cloud_msg.data) == 0:
             return
         self.pointcloud_msgs.append(cloud_msg)
+        self.pointcloud_msgs = self.pointcloud_msgs[-self.pointcloud_max_count:]
 
     def camera_info_callback(self, camera_info_msg):
         if self.camera_info is not None:
@@ -728,8 +744,7 @@ class SAMTrackingManager(Node):
         empty.header = header
         self.binary_mask_pub.publish(empty)
 
-    @torch.inference_mode()
-    @torch.cuda.amp.autocast()
+    @model_inference_context
     def tracking_timer_callback(self):
         if len(self.img_odom_data) == 0:
             self.get_logger().debug(

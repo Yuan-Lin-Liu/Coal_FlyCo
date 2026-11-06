@@ -20,6 +20,7 @@ from geometry_msgs.msg import QuaternionStamped, TransformStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CameraInfo, PointCloud2, PointField, Imu, Joy
 from std_msgs.msg import Float32, Bool, String
+from std_srvs.srv import Trigger
 from rosgraph_msgs.msg import Clock
 from mavros_msgs.msg import AttitudeTarget
 from airsim_ros_pkgs.msg import GimbalAngleEulerCmd
@@ -78,6 +79,10 @@ class Bridge(Node):
         self.last_wall = 0.
         self.stop = threading.Event()
         self.pulses = []
+        self.native_controls = {}
+        if os.environ.get('FLYCO_ISAAC_FLIGHT_CONTROLLER') == 'px4-native':
+            self.native_controls = {action: self.create_client(Trigger, '/flyco/control/'+service)
+                for action, service in (('initial', 'takeoff'), ('hold', 'hold'), ('resume', 'resume'))}
         self.create_subscription(AttitudeTarget, '/setpoint_raw/attitude', self.on_control, qos)
         self.create_subscription(GimbalAngleEulerCmd, '/gimbal_angle_euler_cmd',
                                  self.on_gimbal, qos)
@@ -146,18 +151,35 @@ class Bridge(Node):
             raise ValueError('Wait for FlyCo body/gimbal subscribers before Initialize')
         if action == 'initial' and not self.ready_for_initial():
             raise ValueError('Wait for FlyCo initialization and initial-trajectory publisher before Initial flight')
+        if action in self.native_controls:
+            client = self.native_controls[action]
+            if not client.service_is_ready():
+                raise ValueError('Wait for the native FlyCo control service')
+            future = client.call_async(Trigger.Request())
+            def completed(result):
+                try:
+                    response = result.result()
+                    self.telemetry['native_control_result'] = {
+                        'action': action, 'success': response.success, 'message': response.message}
+                    if not response.success:
+                        self.get_logger().warning('[ACTION] '+response.message)
+                except Exception as exc:
+                    self.telemetry['native_control_result'] = {
+                        'action': action, 'success': False, 'message': str(exc)}
+            future.add_done_callback(completed)
         if action in ('initialize', 'initial', 'hold', 'land', 'resume', 'disarm'):
             self.intent = action
             self.generation += 1
-        if action in ('initialize', 'initial', 'plan', 'scan'):
+        if action in ('initialize', 'initial', 'plan', 'scan') and action not in self.native_controls:
             button = {'initialize': 4, 'initial': 3, 'plan': 2, 'scan': 5}[action]
             self.publish_joy(button)
             self.pulses.append(time.monotonic()+.2)
 
     def ready_for_initial(self):
-        # After selecting the start, FlyCo creates its coverage planner and
-        # then Init_Traj. Both publish this topic; before that the Y pulse is lost.
-        return self.count_publishers('/local_newest_traj') >= 2
+        # Native takeoff uses the executor; the legacy profile also needs
+        # Init_Traj to be ready before its initial-flight Joy pulse.
+        expected = 1 if os.environ.get('FLYCO_ISAAC_FLIGHT_CONTROLLER') == 'px4-native' else 2
+        return self.count_publishers('/local_newest_traj') >= expected
 
     def handle_action(self, action, text=None):
         """Report bridge receipt separately from FlyCo execution or completion."""

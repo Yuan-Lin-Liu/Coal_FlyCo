@@ -1,13 +1,13 @@
 """Select a provider without importing modern model code into ROS1/ROS2."""
 
 
-def make_camera_provider(backend, runtime_params, endpoint):
+def make_camera_provider(backend, runtime_params, endpoint, timeout=30):
     backend = str(backend).strip().upper()
     if backend == "SEMANTIC":
         backend = "A"  # Compatibility with the model service protocol.
     if backend in ("A", "D"):
         from .http_text_sam_provider import HTTPTextSAMProvider
-        return HTTPTextSAMProvider(endpoint, backend)
+        return HTTPTextSAMProvider(endpoint, backend, timeout=timeout)
     if backend not in ("NATIVE", "SAM2"):
         raise ValueError("segmentation_backend must be semantic or native")
     from .sam2_camera_provider import Sam2CameraProvider, EVFTextInitConfig, SAM2RuntimeConfig

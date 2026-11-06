@@ -1,0 +1,33 @@
+# dev-real 验收记录（2026-11-06）
+
+仿真基线提交为 `2726c4f`，在其上创建本地分支 `dev-real`。本记录对应本机测试，运行产物保存在 `runtime/`，不随 Git 发布。
+
+## 已通过
+
+| 项目 | 结果与证据 |
+|---|---|
+| 原 PX4 仿真功能 | 文字感知、预测、轨迹接续、扫描、Hold/Resume；`run-20261106-001856-120c2c` 收到 `flight_end=true`，算法覆盖率 100% |
+| QGC 界面降落 | 真实 Land 按钮及长按空格确认；`px4-verification-20261106-101325/report.json` 成功，实际落地、上锁、停桨 |
+| RViz | `run-20261106-101325-67784f/rviz-visible.png`：点云、FPV、轨迹及 Global Status OK |
+| FlyCo 动态模式 | PX4 注册模式、健康检查和模式执行器；QGC 实际显示 FlyCo，截图 `run-20261106-105129-c6d167/qgc-flyco-mode.png` |
+| 原生模式完整任务 | `run-20261106-120035-5d472d/native-mode-verification.json` 全部阶段成功：注册 → 正常解锁 → Takeoff → FlyCo → 感知/预测 → 扫描结束 → Land → 上锁停桨 |
+| 原生模式真实性 | 同一会话 `native-flight-audit.json` 根据 PX4 ULog 核对：FlyCo nav_state 23、Takeoff 17、Land 18；全程未进入 Offboard 14，MAVLink Offboard 目标发送数为 0 |
+| 原生扫描结果 | 算法覆盖率约 99.58%，最高高度 2.074 m；最终高度约 0.062 m、`armed=false`、四个电机输出为 0 |
+| 构建 | 地面 7 个包、Odin 驱动及完整机载 C++ 算法在 x86_64 主机编译成功；结果分别位于 `runtime/native/ground`、`odin`、`onboard` |
+| 启动与回归 | Odin/native/ground/semantic 入口完成 ROS2 参数解析；原仿真 19 项、原生包 27 项不同用例有通过记录，修复后只重跑受影响的失败用例 |
+
+覆盖率是规划器输出，不是煤堆表面的独立精度测量。旧失败记录保留，不能用其中的注册成功代替飞行成功。
+
+## 关键实现
+
+- 原生模式通过 PX4 external-mode API 注册，并声明位置/姿态控制要求，不发布 OffboardControlMode。
+- 起飞由模式执行器调度 PX4 内置 Takeoff，完成后返回 FlyCo，并保持请求的世界坐标高度；原生入口关闭旧初始化起飞轨迹，避免重复执行。
+- 本机固件起飞后的小幅 heading-only reset 已按新鲜世界位姿重新对齐；位置重置、大幅航向跳变、定位失效仍停止控制。ULog 确认当时仅航向计数器改变，历史 `delta_z` 值不代表起飞后的高度重置。
+- Odin 独立定位入口提供标定、传感器适配和外部视觉位姿；控制入口不自动解锁，暂停和异常恢复使用显式服务。
+- 仿真原生入口支持匹配固件的 `px4_msgs` 覆盖层。本机测试固件为定制 `0d092a91f0…`，不能据此宣称所有官方固件版本均已验证。
+
+## 交付范围
+
+按论文 §7.1.1，地面运行预测，Orin 运行其余算法；地面 launch 默认包含 RViz，语义服务在 Orin。运行顺序和依赖见 [部署说明](deploy_orin.md)。
+
+本机未连接 Orin/Odin/PX4 真机，尚无 ARM64 编译、设备在线标定、双机无线网络负载和硬件实飞证据。ARM SDK 与目标架构构建路径已交付，以上项目留待硬件验收。`dev-real` 为本地分支，尚未推送远端。

@@ -1,10 +1,11 @@
 <?xml version="1.0"?>
 <package format="3">
 <name>flyco_ros2</name><version>0.1.0</version>
-<description>FlyCo perception, planning and control for the Isaac coal warehouse</description>
+<description>FlyCo perception and planning with simulation and native PX4 providers</description>
 <maintainer email="maintainer@example.com">FlyCo local migration</maintainer>
 <license>PolyForm-Noncommercial-1.0.0</license>
 <buildtool_depend>ament_cmake</buildtool_depend>
+<buildtool_depend>ament_cmake_python</buildtool_depend>
 <depend>rclcpp</depend>
 <depend>rclpy</depend>
 <exec_depend>python3-transforms3d</exec_depend>
@@ -13,7 +14,18 @@
 <depend>launch</depend>
 <depend>launch_ros</depend>
 <depend>yaml_cpp_vendor</depend>
-<depend>rviz2</depend>
+<exec_depend>rviz2</exec_depend>
+<exec_depend>sensor_msgs_py</exec_depend>
+<exec_depend>image_geometry</exec_depend>
+<exec_depend>python3-opencv</exec_depend>
+<exec_depend>python3-numpy</exec_depend>
+<exec_depend>python3-scipy</exec_depend>
+<exec_depend>python3-yaml</exec_depend>
+<depend>eigen</depend>
+<depend>libpcl-all-dev</depend>
+<depend>libompl-dev</depend>
+<depend>libopencv-dev</depend>
+<depend>libtbb-dev</depend>
 <depend>ament_index_cpp</depend>
 <depend>std_msgs</depend>
 <depend>std_srvs</depend>
@@ -22,7 +34,7 @@
 <depend>nav_msgs</depend>
 <depend>visualization_msgs</depend>
 <depend>rosgraph_msgs</depend>
-<depend>mavros_msgs</depend>
+<!-- mavros_msgs is used only by the optional legacy simulation controller. -->
 <depend>geographic_msgs</depend>
 <depend>tf2</depend>
 <depend>tf2_ros</depend>

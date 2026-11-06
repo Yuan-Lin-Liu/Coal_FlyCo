@@ -117,7 +117,7 @@ void FlyCoPlanManager::joyCallback(const sensor_msgs::msg::Joy::ConstSharedPtr& 
   if (Joy) joy_msg = *Joy;
 
   // Button 'X' to activate all services of planning
-  if (joy_msg.buttons[2] == true) this->en_activate_ = true;
+  if (joy_msg.buttons.size() > 2 && joy_msg.buttons[2] == true) this->en_activate_ = true;
 
   return;
 }

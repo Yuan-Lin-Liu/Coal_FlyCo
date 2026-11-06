@@ -27,3 +27,11 @@ The vendored A runtime includes the generic tracking/completion fixes developed
 for this workspace. Upstream provenance, asset hashes and required third-party
 notices remain in third_party/SAM_AD_Perception/provenance.json, assets.lock.json
 and LICENSES/. Model weights and pinned dependency downloads are excluded from Git.
+
+Native deployment sources include the Odin ROS2 driver and x86_64/ARM64 SDK
+from the existing feat/orin-px4-native integration. Provenance and license are
+preserved in third_party/drivers/odin_ros_driver/SOURCE.json and LICENSE.
+PX4 ROS2 messages are pinned to release/1.16; provenance and BSD license are in
+third_party/px4_msgs/SOURCE.json and LICENSE. Custom SITL builds must load their
+matching message overlay; the PX4 external-mode API is used without relabeling
+Offboard or patching QGroundControl.

@@ -69,9 +69,10 @@ def main():
     parser.add_argument('command', nargs='?', default='run', choices=('run', 'start', 'stop', 'status', 'action', 'logs', 'rviz'))
     parser.add_argument('action', nargs='?', choices=('initialize', 'initial', 'plan', 'scan', 'hold', 'land', 'resume', 'disarm', 'text'))
     parser.add_argument('text', nargs='?', help='Target description for action text')
-    parser.add_argument('--flight-controller', choices=('px4', 'flyco'), default=None,
+    parser.add_argument('--flight-controller', choices=('px4', 'px4-native', 'flyco'), default=None,
                         help='PX4 SITL (default) or legacy direct attitude adapter')
     parser.add_argument('--px4-dir', default=str(Path.home()/'PX4-Autopilot'))
+    parser.add_argument('--px4-msgs-setup', default='', help='Matching PX4 message overlay for native-mode SITL')
     parser.add_argument('--qgc', action='store_true', help='Open QGroundControl with this session')
     parser.add_argument('--qgc-path', default=str(Path.home()/'QGroundControl-x86_64.AppImage'))
     parser.add_argument('--headless', action='store_true')
@@ -169,7 +170,7 @@ def main():
         raise FileNotFoundError('Scene is missing: '+str(profile['scene'])+
             '. Run ./isaac_python.sh tools/rebuild_scene.py --scene '+profile['id'])
     px4_root = None
-    if args.flight_controller == 'px4':
+    if args.flight_controller in ('px4', 'px4-native'):
         if args.docker:
             parser.error('PX4/QGC currently uses host Isaac/FlyCo; omit --docker or use --flight-controller flyco')
         px4_root = qgc_runtime.preflight(args.px4_dir)
@@ -211,6 +212,7 @@ def main():
         FLYCO_ISAAC_DOMAIN=str(args.domain), FLYCO_ISAAC_NO_PERCEPTION=str(int(args.no_perception)),
         FLYCO_ISAAC_NO_UI=str(int(args.no_ui or args.headless)), FLYCO_ISAAC_RVIZ=str(int(rviz_enabled)),
         FLYCO_ISAAC_FLIGHT_CONTROLLER=args.flight_controller,
+        FLYCO_PX4_MSGS_SETUP=args.px4_msgs_setup,
         FLYCO_ISAAC_SEGMENTATION_BACKEND=args.segmentation_backend,
         FLYCO_ISAAC_SEGMENTATION_ENDPOINT=args.segmentation_endpoint)
     children = []
@@ -249,6 +251,12 @@ def main():
                     raise RuntimeError('Configured semantic perception service is not ready')
         print(f'场景 {profile["id"]}: {profile["name"]}；正在启动 Isaac；日志目录：'+str(run), flush=True)
         if px4_root:
+            if args.flight_controller == 'px4-native':
+                agent_log = (run/'agent.log').open('wb')
+                agent = subprocess.Popen(['MicroXRCEAgent', 'udp4', '-p', '8888'],
+                    env=env, stdout=agent_log, stderr=subprocess.STDOUT, start_new_session=True)
+                agent_log.close()
+                children.append(agent)
             px4 = qgc_runtime.start_px4(px4_root, run, env)
             children.append(px4)
             state['px4'] = process_info(px4.pid)

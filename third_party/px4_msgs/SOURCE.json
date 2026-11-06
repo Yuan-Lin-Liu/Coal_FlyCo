@@ -1,0 +1,7 @@
+{
+  "upstream": "https://github.com/PX4/px4_msgs",
+  "branch": "release/1.16",
+  "commit": "392e831c1f659429ca83902e66820d7094591410",
+  "firmware": "PX4 v1.16",
+  "local_changes": false
+}

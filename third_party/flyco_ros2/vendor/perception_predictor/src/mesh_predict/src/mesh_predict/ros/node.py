@@ -195,7 +195,10 @@ class MeshPredictNode(Node):
             callback_group=MutuallyExclusiveCallbackGroup(),
         )
 
-        self.load_static_camera_info()
+        if params.intrinsics_mode == "camera_info" and params.camera_info_topic:
+            self.get_logger().info("Waiting for live CameraInfo on " + params.camera_info_topic)
+        else:
+            self.load_static_camera_info()
         self.get_logger().warning("MeshPredictNode Init Done")
 
     def load_static_camera_info(self):

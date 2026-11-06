@@ -7,6 +7,7 @@ import base64
 import hashlib
 import http.client
 import json
+import os
 import threading
 import urllib.error
 import urllib.request
@@ -36,12 +37,13 @@ class HTTPProviderStats:
 
 
 class HTTPTextSAMProvider:
-    def __init__(self, endpoint, backend, timeout=30):
+    def __init__(self, endpoint, backend, timeout=30, api_token=None):
         self.endpoint = str(endpoint).rstrip("/")
         self.backend = str(backend).upper()
         if self.backend not in ("A", "D"):
             raise ValueError("backend must be A or D")
         self.timeout = float(timeout)
+        self.api_token = api_token if api_token is not None else os.environ.get('SAM_AD_API_TOKEN', '')
         url = urlsplit(self.endpoint)
         if url.scheme not in ("http", "https") or not url.hostname or url.username:
             raise ValueError("Expected an HTTP(S) model service endpoint")
@@ -86,7 +88,8 @@ class HTTPTextSAMProvider:
                         self._connection = connection(self._url.hostname, self._url.port, timeout=self.timeout)
                     self._connection.request("GET" if data is None else "POST",
                                              self._url.path.rstrip("/") + path, body=data,
-                                             headers={"Content-Type": "application/json"})
+                                             headers={"Content-Type": "application/json", **(
+                                                 {"Authorization": "Bearer " + self.api_token} if self.api_token else {})})
                     response = self._connection.getresponse()
                     content = response.read()
                     result = json.loads(content)

@@ -1,0 +1,38 @@
+# Hardware topic contracts, independent of Isaac's nodes.yaml and TCP bridge.
+- name: flyco_planner
+  executable: flyco_planner
+  remappings:
+    /flyco_planner/body_pose: /flyco/odom
+    /flyco_planner/gimbal_pose: /flyco/gimbal_pose
+    /flyco_planner/predicted_mesh: /prediction/predicted_mesh
+    /map_ros/pose: /flyco/odom
+    /map_ros/cloud: /flyco/lidar/world
+    /map_ros/tracking_all_cloud: /tracking/all_pc
+    /map_ros/tracking_target_cloud: /tracking/target_pc
+    /map_ros/tracking_env_cloud: /tracking/env_pc
+    /map_ros/tracking_pose: /tracking/pose
+    /map_ros/partial_observation: /pred/input_partial
+- name: traj_server
+  executable: traj_server
+  remappings:
+    /traj_server/odom: /flyco/odom
+    /traj_server/gimbal: /flyco/gimbal_pose
+    /traj_server/pos_cmd: /planning/pos_cmd
+    /traj_server/gimbal_cmd: /flyco/gimbal/legacy_command
+- name: sam_tracking_node
+  executable: sam_tracking_node
+  remappings:
+    /cluster/target_pc: /tracking/target_pc
+    /cluster/env_pc: /tracking/env_pc
+    /cluster/target_pose: /tracking/pose
+    /cluster/guide_pc: /tracking/guider_pc
+    /cluster/pointcloud: /flyco/lidar/world
+    /cluster/pose: /flyco/odom
+- name: tracking_prompt
+  executable: prompt_node.py
+- name: mesh_predict_node
+  executable: mesh_predict_node.py
+- name: prompt_ui
+  executable: prompt_ui_cv_node.py
+  remappings:
+    /img_topic: /flyco/camera/rgb

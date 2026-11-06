@@ -1,0 +1,96 @@
+# PX4 v1.16 native DDS. Measure vehicle mounting calibration before use.
+sensor_bridge:
+  ros__parameters:
+    use_sim_time: false
+    odom_topic: /Odometry
+    cloud_topic: /cloud_registered
+    image_topic: /camera/color/image_rect
+    camera_info_topic: /camera/color/camera_info
+    image_is_rectified: true
+    lio_parent_frame: camera_init
+    lio_child_frame: ''
+    lio_twist_frame: child
+    world_frame: world
+    body_frame: base_link
+    camera_optical_frame: camera_optical_frame
+    world_from_lio_translation:
+    - 0.0
+    - 0.0
+    - 0.0
+    world_from_lio_quaternion:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    publish_external_vision: true
+    external_vision_frame: FRD  # Arbitrary SLAM heading; NED requires North alignment.
+    pose_variances:
+    - 0.04
+    - 0.04
+    - 0.09
+    - 0.01
+    - 0.01
+    - 0.02
+    max_sensor_age: 0.4
+    cloud_voxel_size: 0.15
+    px4_topic_prefix: /fmu
+px4_bridge:
+  ros__parameters:
+    use_sim_time: false
+    enable_control: false
+    world_frame: world
+    odom_timeout: 0.3
+    command_timeout: 0.3
+    rate: 50.0
+    warmup_seconds: 1.2
+    bounds_min:
+    - -30.0
+    - -30.0
+    - -0.5
+    bounds_max:
+    - 30.0
+    - 30.0
+    - 10.0
+    max_speed: 1.5
+    max_acceleration: 3.0
+    max_yaw_rate: 1.0
+    max_position_error: 2.0
+    ground_link_timeout: 5.0
+    px4_topic_prefix: /fmu
+sam_tracking:
+  ros__parameters:
+    segmentation_backend: semantic
+    segmentation_endpoint: http://127.0.0.1:8851
+    segmentation_timeout: 3.0
+    camera_optical_frame: camera_optical_frame
+    cloud_sync_slop: 0.08
+    min_height: 0.25
+flyco_planner:
+  ros__parameters:
+    flyco_planner.initial_vertical_relative: true
+    flyco_planner.initial_height: 2.0
+    hcplanner.vmax_: 1.0
+    hctraj.vmax_: 1.0
+    hcplanner.amax_: 2.0
+    hctraj.amax_: 2.0
+    sdf_map.map_size_x: 64.0
+    sdf_map.map_size_y: 64.0
+    sdf_map.map_size_z: 12.0
+    sdf_map.map_back_x: -32.0
+    sdf_map.map_back_y: -32.0
+    sdf_map.ground_height: -0.5
+    sdf_map.virtual_ceil_height: 10.0
+    viewpoint_manager.GroundPos: 0.0
+    viewpoint_manager.TopPos: 10.0
+    viewpoint_manager.viewpoints_distance: 8.0
+sam_tracking_node:
+  ros__parameters:
+    min_height: 0.25
+mesh_predict_node:
+  ros__parameters:
+    min_height: 0.25
+    recall_threshold: 0.9
+    observation_voxel_size: 0.6
+prompt_ui:
+  ros__parameters:
+    initial_text_prompt: 一个煤堆

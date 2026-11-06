@@ -46,6 +46,8 @@ def generate_launch_description():
         mass=meta['mass_kg'], full_thrust=sensor_config['full_thrust'],
         hov_percent=meta['mass_kg']*9.81/sensor_config['full_thrust'])
     planner = params['/flyco_planner']['ros__parameters']
+    if sensor_config.get('flight_controller') == 'px4-native':
+        planner['flyco_planner.init_traj'] = False
     # kdline writes ../../output.txt relative to its working directory.
     # Keep both sampler inputs and outputs inside this simulation session.
     fps = runtime/'fps'
@@ -96,8 +98,15 @@ def generate_launch_description():
                               output='screen')]
     critical = actions[:]
     omitted = set()
-    if sensor_config.get('flight_controller') == 'px4':
+    if sensor_config.get('flight_controller') in ('px4', 'px4-native'):
         omitted.add('px4ctrl')  # PX4 owns all position/attitude/rate control loops
+    if sensor_config.get('flight_controller') == 'px4-native':
+        actions.append(Node(package='flyco_real', executable='px4_bridge.py',
+            parameters=[{'simulation': True, 'use_sim_time': True, 'odom_topic': '/isaac/odom',
+                         'bounds_min': [-32., -24., -.5], 'bounds_max': [32., 24., 10.]}], output='screen'))
+        actions.append(Node(package='flyco_real', executable='task.py', name='ground_heartbeat',
+                            parameters=[{'heartbeat': True}], output='screen'))
+        critical.extend(actions[-2:])
     if os.environ.get('FLYCO_ISAAC_NO_PERCEPTION') == '1':
         omitted.update(('sam_tracking', 'tracking_prompt', 'sam_tracking_node', 'mesh_predict_node'))
     if os.environ.get('FLYCO_ISAAC_NO_UI') == '1':

@@ -37,7 +37,7 @@ NVIDIA 官方容器和安装要求：[Isaac Sim 5.1](https://docs.isaacsim.omniv
 
 若下载依赖本机 HTTP 代理，应同时配置宿主机的 `http_proxy` / `https_proxy`、Docker daemon 的镜像下载代理，以及 Docker 客户端配置中的构建代理。构建期间访问 `127.0.0.1` 代理时，可设置 `COAL_BUILD_NETWORK=host`。此选项只影响镜像构建网络；不要通过关闭 TLS 校验解决证书错误。
 
-真机原生部署（Orin + PX4 v1.16、不使用 Docker）见 [部署说明](docs/deploy_orin.md)，其中明确列出 ARM 库、控制接口和真实传感器尚需完成的适配。
+`dev-real` 负责 Odin + Orin 原生 ROS2 部署及 PX4 动态 FlyCo 模式，见 [部署说明](docs/deploy_orin.md)。论文要求地面运行预测，Orin 运行定位、感知、规划与轨迹执行；原生 FlyCo 模式已通过起飞、预测、扫描和降落闭环，详见 [验收记录](docs/dev-real-status.md)；Orin/Odin 实机验收待硬件连接后进行。
 
 ## 本机原生启动与场景选择
 

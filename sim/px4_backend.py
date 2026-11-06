@@ -52,6 +52,7 @@ class WarehousePX4Backend(PX4MavlinkBackend):
         self.stream_started = self.last_send = self.last_hb = 0.
         self.ack = None
         self.setpoint_count = self.actuator_count = 0
+        self.native_mode = False
 
     @property
     def input_ref(self):
@@ -101,6 +102,8 @@ class WarehousePX4Backend(PX4MavlinkBackend):
         return True
 
     def action(self, name):
+        if self.native_mode and name not in ('land', 'disarm'):
+            return  # Native ROS2 mode owns targets and engagement in this profile.
         if name == 'initialize':
             if self.armed:
                 self.fault = 'Already armed; use Hold or Resume'

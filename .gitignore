@@ -30,3 +30,9 @@ third_party/flyco_ros2/vendor/perception_predictor/src/mesh_predict/src/pointnet
 
 # Python packaging metadata
 *.egg-info/
+
+# Native ROS2 build output and vehicle calibration
+/log/
+/build/
+/install/
+/config/vehicle*.local.yaml

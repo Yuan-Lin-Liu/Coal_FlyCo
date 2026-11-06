@@ -67,10 +67,11 @@ try:
     physics.set_broadphase_type('MBP')
     physics.enable_fabric(False)
     physics.set_gravity(-9.81)
-    use_px4 = cfg.get('flight_controller', 'flyco') == 'px4'
+    use_px4 = cfg.get('flight_controller', 'flyco') in ('px4', 'px4-native')
     if use_px4:
         from px4_backend import WarehousePX4Backend
         backend = WarehousePX4Backend()
+        backend.native_mode = cfg.get('flight_controller') == 'px4-native'
     else:
         backend = FlyCoBackend(cfg['full_thrust'])
     config = MultirotorConfig()

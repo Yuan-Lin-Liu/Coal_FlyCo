@@ -1,0 +1,31 @@
+{
+  "name": "odin_ros_driver",
+  "upstream": "https://github.com/manifoldsdk/odin_ros_driver.git",
+  "upstream_commit": "f51051f2d861f7643d4d33d2ade2952efe1a4672",
+  "version": "0.14.4",
+  "imported_from": "user-provided working tree",
+  "includes_local_modifications": true,
+  "excluded": [
+    ".git",
+    "build",
+    "install",
+    "log",
+    "devel",
+    "recorddata",
+    "map",
+    "script",
+    "__pycache__",
+    "*.pcd",
+    "*.bag",
+    "*.db3"
+  ],
+  "required_device_firmware": "0.14.0 (as declared by upstream README)",
+  "integration_changes": [
+    "Direct ROS2 colcon build; optional visualization extras disabled by default",
+    "CPU-specific x86_64/AArch64 SDK selection",
+    "Rectified CameraInfo and optical frame; zero-skew output and full polynomial distortion detection",
+    "Runtime-only device calibration and per-session command file",
+    "No global pkill on device failures",
+    "Bounded best-effort sensor queues and retained reliable WIWC calibration for late subscribers"
+  ]
+}

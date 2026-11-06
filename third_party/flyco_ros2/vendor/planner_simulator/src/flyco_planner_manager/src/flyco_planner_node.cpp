@@ -74,7 +74,7 @@ boost::circular_buffer<nav_msgs::msg::Odometry::ConstSharedPtr> buffer_odom_;
 boost::circular_buffer<geometry_msgs::msg::QuaternionStamped::ConstSharedPtr> buffer_quat_;
 
 /* Param */
-bool isaac_pose_valid_ = false;
+bool body_pose_valid_ = false;
 bool receive_odom_ = true, start_task_ = false, sim_flag_ = true;
 double ext_x_ = 0.0, ext_y_ = 0.0, ext_z_ = 0.0;
 Eigen::Vector3d cam2body_t_vector_;
@@ -232,7 +232,7 @@ void updatePoseCallback()
 
   // * Current Pose
   start_pose_ << camera_pos(0), camera_pos(1), camera_pos(2), pitch, yaw;
-  isaac_pose_valid_ = true;
+  body_pose_valid_ = true;
 
   return;
 }
@@ -241,9 +241,9 @@ void selectStartFromJoystick()
 {
   if (start_task_ == false)
   {
-    if (!isaac_pose_valid_) { RCLCPP_WARN(node_->get_logger(), "Wait for a synchronized body/gimbal pose before Initialize"); return; }
+    if (!body_pose_valid_) { RCLCPP_WARN(node_->get_logger(), "Wait for a synchronized body/gimbal pose before Initialize"); return; }
     start_task_ = true;
-    RCLCPP_INFO(rclcpp::get_logger("flyco.task_controls"), "\033[41;37m[FlyCo]\033[47;31m Successfully select the initialization from \n (%lf, %lf, %lf) in [World->NWU] frame with pitch %lf deg and yaw %lf deg! \033[0m", start_pose_(0), start_pose_(1), start_pose_(2), start_pose_(3)*180.0/M_PI, start_pose_(4)*180.0/M_PI);
+    RCLCPP_INFO(rclcpp::get_logger("flyco.task_controls"), "\033[41;37m[FlyCo]\033[47;31m Successfully select the initialization from \n (%lf, %lf, %lf) in [World ENU] frame with pitch %lf deg and yaw %lf deg! \033[0m", start_pose_(0), start_pose_(1), start_pose_(2), start_pose_(3)*180.0/M_PI, start_pose_(4)*180.0/M_PI);
   }
 
   return;

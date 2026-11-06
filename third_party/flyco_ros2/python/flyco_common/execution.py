@@ -1,19 +1,28 @@
 """Explicit ROS 2 executor ownership, including GUI main-thread integration."""
 from contextlib import contextmanager
 import threading
+import signal
+from rclpy.signals import SignalHandlerOptions
 
 import rclpy
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor, ShutdownException
 
 
-def spin_node(node, threads=8):
+def spin_node(node, threads=8, stop=None):
     executor = MultiThreadedExecutor(num_threads=threads)
     executor.add_node(node)
     try:
-        executor.spin()
+        if stop is None:
+            executor.spin()
+        else:
+            while rclpy.ok() and not stop.is_set():
+                executor.spin_once(timeout_sec=.1)
     except (KeyboardInterrupt, ExternalShutdownException, ShutdownException):
         pass
     finally:
+        # Humble's MultiThreadedExecutor.shutdown() does not join its thread pool.
+        # Drain callbacks before destroying publishers or their ROS context.
+        executor._executor.shutdown(wait=True)
         executor.shutdown()
         executor.remove_node(node)
 
@@ -48,7 +57,14 @@ def background_executor(node, threads=8):
 
 
 def main_for(node_factory, *args, gui=False, **kwargs):
-    rclpy.init()
+    stop = threading.Event()
+    previous_handlers = {}
+    if gui:
+        rclpy.init()
+    else:
+        rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+        for number in (signal.SIGINT, signal.SIGTERM):
+            previous_handlers[number] = signal.signal(number, lambda *_: stop.set())
     node = None
     try:
         node = node_factory(*args, **kwargs)
@@ -56,7 +72,7 @@ def main_for(node_factory, *args, gui=False, **kwargs):
             with background_executor(node):
                 node.run()
         else:
-            spin_node(node)
+            spin_node(node, stop=stop)
     except KeyboardInterrupt:
         pass
     finally:
@@ -64,3 +80,5 @@ def main_for(node_factory, *args, gui=False, **kwargs):
             node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
+        for number, handler in previous_handlers.items():
+            signal.signal(number, handler)

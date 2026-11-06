@@ -92,7 +92,9 @@ if _ext is None:
     )
     _ext_headers = glob.glob(osp.join(_ext_src_root, "include", "*"))
 
-    os.environ.setdefault("TORCH_CUDA_ARCH_LIST", "8.6")
+    if "TORCH_CUDA_ARCH_LIST" not in os.environ and torch.cuda.is_available():
+        major, minor = torch.cuda.get_device_capability()
+        os.environ["TORCH_CUDA_ARCH_LIST"] = f"{major}.{minor}"
     _ext = load(
         "_ext",
         sources=_ext_sources,
