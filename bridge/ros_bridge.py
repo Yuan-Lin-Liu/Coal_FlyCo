@@ -19,11 +19,11 @@ from builtin_interfaces.msg import Time
 from geometry_msgs.msg import QuaternionStamped, TransformStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CameraInfo, PointCloud2, PointField, Imu, Joy
-from std_msgs.msg import Float32, Bool
+from std_msgs.msg import Float32, Bool, String
 from rosgraph_msgs.msg import Clock
 from mavros_msgs.msg import AttitudeTarget
 from airsim_ros_pkgs.msg import GimbalAngleEulerCmd
-from quadrotor_msgs.msg import PositionCommand, Mesh
+from quadrotor_msgs.msg import PositionCommand, PolynomialTrajGroup, Mesh
 from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 from scipy.spatial.transform import Rotation
 
@@ -53,6 +53,7 @@ class Bridge(Node):
         self.rgbcloud = self.create_publisher(PointCloud2, '/isaac/camera/world_points', qos)
         self.gimbal = self.create_publisher(QuaternionStamped, '/gimbal_pose', qos)
         self.joy = self.create_publisher(Joy, '/joy', 10)
+        self.query_text = self.create_publisher(String, '/query_text', 10)
         self.tf = TransformBroadcaster(self)
         self.static_tf = StaticTransformBroadcaster(self)
         tr = TransformStamped()
@@ -64,6 +65,8 @@ class Bridge(Node):
         self.lock = threading.Lock()
         self.control = None
         self.position_command = None
+        self.position_count = 0
+        self.trajectory_windows = []
         self.gimbal_command = [0., 0., 0.]
         self.intent = 'GROUNDED'
         self.generation = 0
@@ -79,6 +82,7 @@ class Bridge(Node):
         self.create_subscription(GimbalAngleEulerCmd, '/gimbal_angle_euler_cmd',
                                  self.on_gimbal, qos)
         self.create_subscription(PositionCommand, '/planning/pos_cmd', self.on_position, qos)
+        self.create_subscription(PolynomialTrajGroup, '/local_newest_traj', self.on_trajectory, qos)
         self.create_subscription(Mesh, '/prediction/predicted_mesh', self.on_mesh, qos)
         self.create_subscription(PointCloud2, '/tracking/target_pc',
             lambda msg: self.telemetry.update(target_cloud_points=msg.width*msg.height), qos)
@@ -102,8 +106,30 @@ class Bridge(Node):
                             'throttle': values[3]}
 
     def on_position(self, msg):
-        self.position_command = {'p': [msg.position.x, msg.position.y, msg.position.z],
-                                 'trajectory_id': msg.trajectory_id}
+        self.position_count += 1
+        with self.lock:
+            t = msg.header.stamp.sec + msg.header.stamp.nanosec*1e-9
+            # The legacy traj_server does not update PositionCommand's ID.
+            # Match its timestamp against the planner's polynomial schedule.
+            active = [w for w in self.trajectory_windows if w['start'] <= t]
+            window = max(active, key=lambda w: w['start']) if active else None
+            self.position_command = {
+                'p': [msg.position.x, msg.position.y, msg.position.z],
+                'v': [msg.velocity.x, msg.velocity.y, msg.velocity.z],
+                'a': [msg.acceleration.x, msg.acceleration.y, msg.acceleration.z],
+                'yaw': msg.yaw, 'yaw_dot': msg.yaw_dot,
+                'count': self.position_count, 't': t,
+                'trajectory_id': window['id'] if window else msg.trajectory_id,
+                'trajectory_end': window['end'] if window else None}
+
+    def on_trajectory(self, msg):
+        if msg.action != PolynomialTrajGroup.ACTION_ADD or not msg.pos_traj:
+            return
+        start = msg.start_time.sec + msg.start_time.nanosec*1e-9
+        with self.lock:
+            self.trajectory_windows = (self.trajectory_windows + [
+                {'id': msg.trajectory_id, 'start': start,
+                 'end': start + sum(piece.duration for piece in msg.pos_traj)}])[-8:]
 
     def on_mesh(self, msg):
         self.telemetry['mesh_messages'] += 1
@@ -118,7 +144,9 @@ class Bridge(Node):
             raise ValueError('Unknown action: '+str(action))
         if action == 'initialize' and (self.last_t < 3. or self.odom.get_subscription_count() < 3):
             raise ValueError('Wait for FlyCo body/gimbal subscribers before Initialize')
-        if action in ('initial', 'hold', 'land', 'resume', 'disarm'):
+        if action == 'initial' and not self.ready_for_initial():
+            raise ValueError('Wait for FlyCo initialization and initial-trajectory publisher before Initial flight')
+        if action in ('initialize', 'initial', 'hold', 'land', 'resume', 'disarm'):
             self.intent = action
             self.generation += 1
         if action in ('initialize', 'initial', 'plan', 'scan'):
@@ -126,7 +154,12 @@ class Bridge(Node):
             self.publish_joy(button)
             self.pulses.append(time.monotonic()+.2)
 
-    def handle_action(self, action):
+    def ready_for_initial(self):
+        # After selecting the start, FlyCo creates its coverage planner and
+        # then Init_Traj. Both publish this topic; before that the Y pulse is lost.
+        return self.count_publishers('/local_newest_traj') >= 2
+
+    def handle_action(self, action, text=None):
         """Report bridge receipt separately from FlyCo execution or completion."""
         messages = {
             'initialize': '1 Initialize received; FlyCo will capture the start pose.',
@@ -134,12 +167,20 @@ class Bridge(Node):
             'plan': '3 Planner activation requested. Use 4 to start scanning.',
             'scan': '4 Scan trigger sent; waiting for FlyCo planning output.',
             'hold': 'Hold requested; check flight mode and vehicle motion.',
-            'land': 'Land requested; wait for GROUNDED and stopped motors.',
+            'land': 'Land requested; wait for landing_complete (PX4) or GROUNDED and stopped motors.',
             'resume': 'Resume requested; waiting for fresh FlyCo control.',
             'disarm': 'Disarm requested; allowed only near the ground.',
+            'text': 'Target description sent to perception.',
         }
         try:
-            self.action(action)
+            if action == 'text':
+                if not isinstance(text, str) or not text.strip():
+                    raise ValueError('Target description must contain text')
+                if not self.query_text.get_subscription_count():
+                    raise ValueError('Wait for perception subscribers before sending text')
+                self.query_text.publish(String(data=text.strip()))
+            else:
+                self.action(action)
             state, message = 'received', messages[action]
         except ValueError as exc:
             state, message = 'rejected', str(exc)
@@ -171,12 +212,15 @@ class Bridge(Node):
             self.pulses = [p for p in self.pulses if p > time.monotonic()]
         for path in sorted((RUNTIME/'actions').glob('*.json')):
             try:
-                self.handle_action(json.loads(path.read_text())['action'])
+                event = json.loads(path.read_text())
+                self.handle_action(event['action'], event.get('text'))
             except (OSError, ValueError, KeyError) as exc:
                 self.get_logger().error(str(exc))
             path.unlink(missing_ok=True)
         value = dict(self.telemetry, sim_time=self.last_t, control_count=self.control_count,
                      position_command=self.position_command, intent=self.intent,
+                     perception_subscribers=self.query_text.get_subscription_count(),
+                     ready_for_initial=self.ready_for_initial(),
                      ready_for_initialize=self.last_t >= 3. and self.odom.get_subscription_count() >= 3,
                      sensor_age_s=time.monotonic()-self.last_wall if self.last_wall else None)
         tmp = RUNTIME/'bridge_status.tmp'
@@ -304,8 +348,10 @@ class Bridge(Node):
                             self.publish(frame, arrays)
                             with self.lock:
                                 send_packet(conn, {'control': self.control,
+                                    'position_command': self.position_command,
                                     'gimbal': self.gimbal_command, 'intent': self.intent,
                                     'generation': self.generation, 'telemetry': self.telemetry,
+                                    'ready_for_initial': self.ready_for_initial(),
                                     'ready_for_initialize': self.last_t >= 3. and
                                         self.odom.get_subscription_count() >= 3})
         except ConnectionError:

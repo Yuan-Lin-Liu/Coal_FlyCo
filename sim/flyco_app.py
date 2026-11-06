@@ -67,10 +67,20 @@ try:
     physics.set_broadphase_type('MBP')
     physics.enable_fabric(False)
     physics.set_gravity(-9.81)
-    backend = FlyCoBackend(cfg['full_thrust'])
+    use_px4 = cfg.get('flight_controller', 'flyco') == 'px4'
+    if use_px4:
+        from px4_backend import WarehousePX4Backend
+        backend = WarehousePX4Backend()
+    else:
+        backend = FlyCoBackend(cfg['full_thrust'])
     config = MultirotorConfig()
     config.backends = [backend]
-    config.sensors = [IMU({'update_rate': cfg['physics_hz']})]
+    if use_px4:
+        from pegasus.simulator.logic.sensors import Barometer, Magnetometer, GPS
+        config.sensors = [IMU({'update_rate': cfg['physics_hz']}), Barometer(), Magnetometer(), GPS()]
+    else:
+        config.sensors = [IMU({'update_rate': cfg['physics_hz']})]
+    render_every = max(1, round(cfg['physics_hz']/30))
     spawn_q = Rotation.from_euler('z', cfg.get('spawn_yaw_degrees', 0.), degrees=True).as_quat()
     drone = Multirotor('/World/Drone', ROBOTS['Iris'], 0, cfg['spawn'], spawn_q, config=config)
     camera = Camera('/World/FlyCoCamera', resolution=(cfg['width'], cfg['height']), frequency=30)
@@ -86,7 +96,7 @@ try:
     camera.set_world_pose(position=initial_camera_position,
         orientation=initial_camera_q[[3, 0, 1, 2]], camera_axes='ros')
     for i in range(120):
-        world.step(render=(i % 4 == 0))
+        world.step(render=(i % render_every == 0))
     dc = drone.get_dc_interface()
     articulation = dc.get_articulation('/World/Drone')
     backend.mass = sum(float(dc.get_rigid_body_properties(dc.get_articulation_body(
@@ -111,7 +121,8 @@ try:
         ''.join(' '.join(map(str, p))+'\n' for p in vertices))
     write_json(args.runtime/'sim_metadata.json', {'mass_kg': backend.mass, 'physics_hz': cfg['physics_hz'],
         'scene_id': cfg.get('scene_id', 'custom'), 'scene_name': cfg.get('scene_name', args.scene.stem),
-        'controller': 'FlyCo ROS px4ctrl -> Isaac attitude adapter -> Pegasus rotor physics',
+        'controller': ('FlyCo trajectory -> PX4 SITL -> Pegasus MAVLink rotor physics' if use_px4
+                       else 'FlyCo ROS px4ctrl -> Isaac attitude adapter -> Pegasus rotor physics'),
         'state_source': 'Isaac simulation state (same role as FlyCo AirSim state)',
         'scene_sha256': scene_hash, 'colliders': len(raycast.paths), 'triangles': raycast.triangles,
         'camera': cfg, 'reference_use': 'RGB mapping evaluation only'})
@@ -149,6 +160,7 @@ try:
                                     ('plan', '3 Enable planning'), ('scan', '4 Autonomous scan')]:
                     buttons[name] = ui.Button(label, height=32, clicked_fn=lambda n=name: request_action(n))
                 buttons['initialize'].enabled = False
+                buttons['initial'].enabled = False
                 with ui.HStack(height=32):
                     ui.Button('Hold', clicked_fn=lambda: request_action('hold'))
                     ui.Button('Land', clicked_fn=lambda: request_action('land'))
@@ -178,19 +190,33 @@ try:
     step = 0
     image_count = 0
     previous_mode = None
+    shutdown_requested = False
+    shutdown_deadline = None
     trajectory = (args.runtime/'trajectory.jsonl').open('w')
     print('FLYCO_ISAAC_READY', flush=True)
-    while app.is_running() and (not args.duration or backend.sim_time < args.duration):
+    while app.is_running():
         wall = time.monotonic()
-        if (args.runtime/'stop.request').exists():
-            break
+        if (args.runtime/'stop.request').exists() or (args.duration and backend.sim_time >= args.duration):
+            if not use_px4:
+                break
+            if not shutdown_requested:
+                if not backend.armed:
+                    break
+                backend.action('land')
+                shutdown_requested = True
+                shutdown_deadline = wall + 90.
+                print('[FLIGHT] Shutdown requested; waiting for PX4 landing and stopped motors.', flush=True)
+            if backend.landing_state == 'complete':
+                break
+            if wall > shutdown_deadline:
+                raise TimeoutError('Shutdown landing did not complete within 90 seconds; inspect px4.log')
         world.step(render=False)
         step += 1
         t = backend.sim_time
         state = drone.state
         position = np.asarray(state.position)
         attitude = np.asarray(state.attitude)
-        if not args.headless and follow_view[0] and step % 4 == 0:
+        if not args.headless and follow_view[0] and step % render_every == 0:
             set_camera_view(eye=position+[-5., -5., 3.], target=position)
         arrays = {}
         frame = {'t': t, 'p': position.tolist(), 'q': attitude.tolist(),
@@ -208,7 +234,7 @@ try:
             arrays['cloud'] = hits[np.all(np.isfinite(hits), axis=1)].astype('<f4')
             next_lidar = t+1/cfg['lidar_hz']-.0001
         capture_camera = t >= next_camera
-        if capture_camera or step % 4 == 0:
+        if capture_camera or step % render_every == 0:
             # Keep the mount current on every render, including frames between
             # 10 Hz RGB-D publications. A stale mount can trail inside the
             # moving airframe and contaminate RTX temporal history.
@@ -233,7 +259,7 @@ try:
             next_camera = t+1/cfg['camera_hz']-.0001
         send_packet(connection, frame, arrays)
         feedback, _ = recv_packet(connection)
-        backend.set_command(feedback['control'])
+        backend.set_command(feedback.get('position_command') if use_px4 else feedback['control'])
         gimbal = feedback['gimbal']
         if feedback['generation'] != generation:
             generation = feedback['generation']
@@ -253,11 +279,14 @@ try:
                 fault=backend.fault, motors=backend.input_ref, command_count=backend.command_count,
                 image_frames=image_count, rtf=t/max(time.monotonic()-started, 1e-6),
                 telemetry=feedback['telemetry'])
+            if use_px4:
+                status['px4'] = backend.telemetry()
             write_json(args.runtime/'sim_status.json', status)
             trajectory.write(json.dumps(status)+'\n')
             trajectory.flush()
             if not args.headless:
                 buttons['initialize'].enabled = feedback['ready_for_initialize']
+                buttons['initial'].enabled = feedback.get('ready_for_initial', False)
                 telemetry = feedback['telemetry']
                 coverage = telemetry.get('coverage')
                 status_label.text = (f'{backend.mode}  t={t:.1f}s\n'+
@@ -269,8 +298,18 @@ try:
             next_status = t+.2
         time.sleep(max(0., 1/cfg['physics_hz']-(time.monotonic()-wall)))
     trajectory.close()
+    # Landing may finish between the periodic snapshots. Persist the actual
+    # stopped state so launch.py status cannot keep showing the previous arm.
+    if use_px4 and 'status' in locals():
+        status.update(t=backend.sim_time, position=np.asarray(backend.state.position).tolist(),
+                      velocity=np.asarray(backend.state.linear_velocity).tolist(),
+                      mode=backend.mode, fault=backend.fault,
+                      motors=backend.input_ref, px4=backend.telemetry())
+        write_json(args.runtime/'sim_status.json', status)
     result.update(ok=True, sim_seconds=backend.sim_time, control_count=backend.command_count,
                   image_frames=image_count, final_mode=backend.mode)
+    if use_px4:
+        result['px4'] = backend.telemetry()
 except KeyboardInterrupt:
     result['stopped_by_operator'] = True
 except Exception as exc:
@@ -281,6 +320,8 @@ finally:
         connection.close()
     result['scene_unchanged'] = hashlib.sha256(args.scene.read_bytes()).hexdigest() == locals().get('scene_hash')
     write_json(args.runtime/'result.json', result)
+    if 'backend' in locals() and locals().get('use_px4'):
+        backend.stop()
     app.close()
 if result.get('error'):
     raise SystemExit(1)

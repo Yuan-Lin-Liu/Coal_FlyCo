@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT/'bridge'))
 sys.path.insert(0, str(ROOT/'tools'))
 import container_runtime
+import qgc_runtime
 from console_output import ConsoleOutput
 from scene_profiles import resolve_scene
 
@@ -66,7 +67,13 @@ def startup_failure(run, returncode, timed_out=False):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('command', nargs='?', default='run', choices=('run', 'start', 'stop', 'status', 'action', 'logs', 'rviz'))
-    parser.add_argument('action', nargs='?', choices=('initialize', 'initial', 'plan', 'scan', 'hold', 'land', 'resume', 'disarm'))
+    parser.add_argument('action', nargs='?', choices=('initialize', 'initial', 'plan', 'scan', 'hold', 'land', 'resume', 'disarm', 'text'))
+    parser.add_argument('text', nargs='?', help='Target description for action text')
+    parser.add_argument('--flight-controller', choices=('px4', 'flyco'), default=None,
+                        help='PX4 SITL (default) or legacy direct attitude adapter')
+    parser.add_argument('--px4-dir', default=str(Path.home()/'PX4-Autopilot'))
+    parser.add_argument('--qgc', action='store_true', help='Open QGroundControl with this session')
+    parser.add_argument('--qgc-path', default=str(Path.home()/'QGroundControl-x86_64.AppImage'))
     parser.add_argument('--headless', action='store_true')
     parser.add_argument('--docker', action='store_true', help='Run Isaac and FlyCo in project Docker images')
     parser.add_argument('--no-perception', action='store_true')
@@ -89,6 +96,8 @@ def main():
     parser.add_argument('--verbose', action='store_true', help='Mirror complete Isaac/ROS output to the terminal')
     parser.add_argument('--once', action='store_true', help='Print saved logs without following (logs command)')
     args = parser.parse_args()
+    if args.flight_controller is None:
+        args.flight_controller = 'flyco' if args.docker else 'px4'
     RUNTIME.mkdir(exist_ok=True)
     if args.command in ('status', 'stop', 'action', 'logs', 'rviz'):
         run = current()
@@ -144,8 +153,12 @@ def main():
                 parser.error('action requires an action name')
             if not process_alive(state['manager']):
                 raise RuntimeError('Session is no longer running')
-            (run/'actions'/f'{time.time_ns()}-{uuid.uuid4().hex}.json').write_text(
-                json.dumps({'action': args.action}))
+            event = {'action': args.action}
+            if args.action == 'text':
+                if not args.text or not args.text.strip():
+                    parser.error('action text requires a target description')
+                event['text'] = args.text.strip()
+            (run/'actions'/f'{time.time_ns()}-{uuid.uuid4().hex}.json').write_text(json.dumps(event))
             print('Queued:', args.action)
         return 0
     try:
@@ -155,6 +168,15 @@ def main():
     if not profile['scene'].is_file():
         raise FileNotFoundError('Scene is missing: '+str(profile['scene'])+
             '. Run ./isaac_python.sh tools/rebuild_scene.py --scene '+profile['id'])
+    px4_root = None
+    if args.flight_controller == 'px4':
+        if args.docker:
+            parser.error('PX4/QGC currently uses host Isaac/FlyCo; omit --docker or use --flight-controller flyco')
+        px4_root = qgc_runtime.preflight(args.px4_dir)
+        profile['config']['physics_hz'] = 250
+    elif args.qgc:
+        parser.error('--qgc requires --flight-controller px4')
+    profile['config']['flight_controller'] = args.flight_controller
     if args.command == 'start':
         log = (RUNTIME/'launcher.log').open('ab')
         argv = [sys.executable, str(ROOT/'launch.py'), 'run']+sys.argv[2:]
@@ -167,7 +189,7 @@ def main():
         container_runtime.preflight()
     if not args.docker and not (flyco_runtime/'interfaces/install/local_setup.bash').is_file():
         raise FileNotFoundError('Build project-local FlyCo first: ./tools/setup_flyco.sh')
-    for binary in ('flyco_planner', 'traj_server', 'px4ctrl_node', 'joy_cmd',
+    for binary in ('flyco_planner', 'traj_server', 'joy_cmd',
                    'rgb_point_mapping_node', 'sam_tracking_node', 'kdline'):
         if not args.docker and not (flyco_runtime/'build'/binary).is_file():
             raise FileNotFoundError('Run ./tools/setup_flyco.sh first; missing '+binary)
@@ -188,6 +210,7 @@ def main():
     env = dict(os.environ, FLYCO_ISAAC_RUNTIME=str(run), FLYCO_ISAAC_PORT=str(args.port),
         FLYCO_ISAAC_DOMAIN=str(args.domain), FLYCO_ISAAC_NO_PERCEPTION=str(int(args.no_perception)),
         FLYCO_ISAAC_NO_UI=str(int(args.no_ui or args.headless)), FLYCO_ISAAC_RVIZ=str(int(rviz_enabled)),
+        FLYCO_ISAAC_FLIGHT_CONTROLLER=args.flight_controller,
         FLYCO_ISAAC_SEGMENTATION_BACKEND=args.segmentation_backend,
         FLYCO_ISAAC_SEGMENTATION_ENDPOINT=args.segmentation_endpoint)
     children = []
@@ -207,6 +230,7 @@ def main():
              'waypoints': str(run/'initial_waypts.yaml'),
              'flyco_source': str(ROOT/'third_party/flyco_ros2'),
              'flyco_runtime': str(flyco_runtime), 'docker': args.docker,
+             'flight_controller': args.flight_controller, 'px4_dir': str(px4_root) if px4_root else None,
              'segmentation_backend': args.segmentation_backend,
              'segmentation_endpoint': args.segmentation_endpoint}
     (run/'session.json').write_text(json.dumps(state, indent=2))
@@ -224,6 +248,17 @@ def main():
                 if info.get('backend') != 'A' or info.get('status') != 'ready':
                     raise RuntimeError('Configured semantic perception service is not ready')
         print(f'场景 {profile["id"]}: {profile["name"]}；正在启动 Isaac；日志目录：'+str(run), flush=True)
+        if px4_root:
+            px4 = qgc_runtime.start_px4(px4_root, run, env)
+            children.append(px4)
+            state['px4'] = process_info(px4.pid)
+            if args.qgc:
+                qgc = qgc_runtime.start_qgc(args.qgc_path, run, env)
+                if qgc is not None:
+                    children.append(qgc)
+                    state['qgc'] = process_info(qgc.pid)
+            print('PX4 SITL 已启动；QGC 使用 UDP 14550 自动连接。', flush=True)
+        (run/'session.json').write_text(json.dumps(state, indent=2))
         sim_log = (run/'isaac.log').open('wb')
         cmd = [str(ROOT/'isaac_python.sh'), '-u', str(ROOT/'sim/flyco_app.py'),
             '--scene', str(profile['scene'].resolve()), '--config', str(run/'scene_config.yaml'),
@@ -242,6 +277,8 @@ def main():
             output.emit()
             if stopping or (run/'stop.request').exists():
                 return 0
+            if px4_root and px4.poll() is not None:
+                raise RuntimeError('PX4 SITL exited; see '+str(run/'px4.log'))
             returncode = sim.poll()
             timed_out = time.monotonic() > deadline
             if returncode is not None or timed_out:
@@ -262,15 +299,17 @@ def main():
         print('FlyCo Isaac session:', run, flush=True)
         while sim.poll() is None and not stopping:
             output.emit()
+            if px4_root and px4.poll() is not None:
+                raise RuntimeError('PX4 SITL exited; see '+str(run/'px4.log'))
             if ros.poll() is not None:
                 if (run/'result.json').exists() or (run/'stop.request').exists():
-                    sim.wait(timeout=15)
+                    sim.wait(timeout=110 if px4_root else 15)
                     break
                 raise RuntimeError('FlyCo ROS stack exited; see '+str(run/'ros.log'))
             time.sleep(.3)
         if sim.poll() is None:
             try:
-                sim.wait(timeout=15)
+                sim.wait(timeout=110 if px4_root else 15)
             except subprocess.TimeoutExpired:
                 pass
         return sim.returncode or 0
@@ -283,7 +322,11 @@ def main():
                 child.wait(timeout=15)
             except subprocess.TimeoutExpired:
                 os.killpg(child.pid, signal.SIGTERM)
-                child.wait(timeout=10)
+                try:
+                    child.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    child.wait(timeout=5)
         if args.docker:
             for role in ('flyco', 'isaac'):
                 container_runtime.stop(role, run)

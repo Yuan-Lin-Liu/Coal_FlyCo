@@ -96,6 +96,8 @@ def generate_launch_description():
                               output='screen')]
     critical = actions[:]
     omitted = set()
+    if sensor_config.get('flight_controller') == 'px4':
+        omitted.add('px4ctrl')  # PX4 owns all position/attitude/rate control loops
     if os.environ.get('FLYCO_ISAAC_NO_PERCEPTION') == '1':
         omitted.update(('sam_tracking', 'tracking_prompt', 'sam_tracking_node', 'mesh_predict_node'))
     if os.environ.get('FLYCO_ISAAC_NO_UI') == '1':

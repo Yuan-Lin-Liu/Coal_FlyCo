@@ -1,6 +1,6 @@
 # Coal_FlyCo：Isaac Sim + FlyCo 煤仓无人机仿真
 
-Isaac Sim 5.1 / Pegasus 提供无人机物理、RGB-D 相机和激光雷达；FlyCo 负责目标分割、网格预测、覆盖规划与位置控制。仿真使用 Isaac 状态作为定位输入，当前未接入 Super-LIO 或 PX4 固件。
+Isaac Sim 5.1 / Pegasus 提供无人机物理、RGB-D 相机和激光雷达；FlyCo 负责目标分割、网格预测与覆盖轨迹规划。宿主机原生模式默认由 **PX4 SITL** 执行飞控控制，支持 **QGroundControl** 联动；FlyCo 使用 Isaac 真值定位，PX4 使用模拟传感器运行 EKF。
 
 当前默认使用通用 **语义目标感知（Semantic Perception）**，原 EVF-SAM2/SAMURAI 方案可用 `--segmentation-backend native` 对照运行。接入差异、验证结果和模型准备方式见 [识别模块说明](docs/semantic-perception.md)。
 
@@ -23,7 +23,7 @@ ACCEPT_EULA=Y ./docker/run.sh --scene 6
 
 `docker/setup.sh` 基于 NVIDIA Isaac Sim 和 OSRF ROS2 Humble Desktop 官方镜像，构建三个本地镜像：Isaac Sim 5.1 + Pegasus、ROS2 Humble + FlyCo，以及独立的 语义目标感知服务。运行时通过宿主机网络上的 TCP 端口通信，共享本次会话目录；源码以只读方式挂载，权重以只读方式挂载，日志和缓存单独持久化。宿主机不需要安装 ROS 或完整 CUDA Toolkit。
 
-默认显示 Isaac、FlyCo-UI、RViz，需可用的本地 X11/XWayland 显示和 Xauthority。使用 `--headless` 运行无窗口仿真。原有终端管理命令继续可用，例如 `python3 launch.py status`、`python3 launch.py action land`、`python3 launch.py stop`。结束管理器会停止其创建的两个容器。
+默认显示 Isaac、FlyCo-UI、RViz，需可用的本地 X11/XWayland 显示和 Xauthority。使用 `--headless` 运行无窗口仿真。原有终端管理命令继续可用，例如 `python3 launch.py status`、`python3 launch.py action land`、`python3 launch.py stop`。结束管理器会停止其创建的两个容器。Docker 默认保留原自定义控制路径；PX4/QGC 联动使用下文宿主机原生入口。
 
 ```bash
 ./docker/setup.sh --check          # 检查镜像、权重及固定版本缓存
@@ -41,10 +41,12 @@ NVIDIA 官方容器和安装要求：[Isaac Sim 5.1](https://docs.isaacsim.omniv
 
 ## 本机原生启动与场景选择
 
+PX4 / QGC 的准备、操作和排查见 [联动快速说明](docs/px4_qgc.md)。本机已有 PX4 SITL 和 QGC 时：
+
 ```bash
 # 二选一；不加参数默认使用场景 4
-./launch_warehouse.sh --scene 4
-./launch_warehouse.sh --scene 6
+./launch_warehouse.sh --scene 4 --qgc
+./launch_warehouse.sh --scene 6 --qgc
 ```
 
 | 场景 | 煤堆模型 | 尺寸（米） | USD |
@@ -59,13 +61,13 @@ NVIDIA 官方容器和安装要求：[Isaac Sim 5.1](https://docs.isaacsim.omniv
 ## 操作
 
 1. 等待算法启动，点 **1 Initialize**，等待起点初始化完成。
-2. 点 **2 Initial flight**，原地垂直起飞至航点高度后悬停；当前设置为 2 m。
+2. 点 **2 Initial flight**，仿真请求 PX4 切入 Offboard、正常解锁，原地垂直起飞至 2 m 后悬停。
 3. 在 **FlyCo-UI** 点选煤堆并发送提示；默认语义目标感知后端请点击 **send text** 发送文字，点提示需使用 `--segmentation-backend native`。
 4. 在 RViz 的 **Semantic Perception Image** 查看紫红色识别覆盖图。等待目标点云和预测网格出现，再点 **3 Enable planning**。
 5. 点 **4 Autonomous scan** 开始扫描。
-6. 点 **Land** 降落，确认 `GROUNDED` 且旋翼停止。
+6. 点 Isaac 的 **Land** 或 QGC 的 **降落**，确认落地、`PX4_*_DISARMED` 且旋翼停止（旧控制路径显示 `GROUNDED`）。
 
-**Hold** 保持当前位置，**Resume** 恢复 FlyCo 控制。面板的 `RECEIVED` 表示收到操作，实际执行情况以模式、位置和运动为准。
+初始化轨迹正常结束后，PX4 保持终点并自动接续下一段扫描轨迹。**Hold** 保持当前位置；主动暂停、异常断流或 QGC 接管后，用 **Resume** 恢复 FlyCo 控制。面板的 `RECEIVED` 表示收到操作，实际执行情况以模式、位置和运动为准。PX4 降落完成以 `px4.landing_complete: true` 为准；正常退出会先等待降落停桨。
 
 ```bash
 python3 launch.py status         # 当前会话和飞行状态
@@ -75,6 +77,7 @@ python3 launch.py logs --verbose # 完整输出；Ctrl+C 只退出查看
 python3 launch.py rviz           # 单独打开当前会话的 RViz
 python3 launch.py start --scene 6 # 后台启动
 python3 launch.py action land    # 终端执行面板操作
+python3 launch.py action text 'A single large pile of black coal.' # 终端发送目标文字
 ```
 
 `action` 还支持 `initialize`、`initial`、`plan`、`scan`、`hold`、`resume`、`disarm`。默认 ROS 域为 64、TCP 端口为 8870，可通过 `--domain`、`--port` 修改。同一项目同时运行一个会话。
