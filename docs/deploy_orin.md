@@ -1,8 +1,9 @@
 # Orin + Odin + PX4 部署
 
-分支 `dev-real`，ROS2 Humble。先在仿真验证，再接入真机。PX4 自定义固件必须使用匹配的 `px4_msgs`；仓库默认消息对应 PX4 v1.16，支持外部模式的 QGC 版本才能显示 FlyCo。当前本机 SITL 是定制固件，仿真时另加载其匹配的消息覆盖层。
+分支 `dev-real`，ROS2 Humble。
 
-论文 §7.1.1 的分工：**地面电脑运行表面预测；Orin 运行定位、感知、规划和轨迹执行**。原文使用 Orin NX、Mid360 和云台相机；本工程以 Odin 设备内 SLAM 替换定位链，固定相机使用实测外参。来源：[FlyCo 论文](https://arxiv.org/html/2601.07558v1#S7.SS1.SSS1)。
+论文 §7.1.1 的分工：**地面电脑运行表面预测；Orin 运行定位、感知、规划和轨迹执行**。
+原文使用 Orin NX、Mid360 和云台相机；本工程以 Odin 设备内 SLAM 替换定位链，固定相机使用实测外参。
 
 | 设备 | 模块 |
 |---|---|
@@ -39,7 +40,7 @@ COLCON_DEFAULTS_FILE="$PWD/config/colcon_onboard.yaml" colcon --log-base runtime
 COLCON_DEFAULTS_FILE="$PWD/config/colcon_ground.yaml" colcon --log-base runtime/native/ground/log build
 ```
 
-若 Embree 不在系统搜索路径，编译前设置 `CMAKE_PREFIX_PATH` 指向目标架构安装目录。更新后重复对应构建命令。当前 `dev-real` 尚为本地分支，远端拉取命令须在分支发布后使用。
+若 Embree 不在系统搜索路径，编译前设置 `CMAKE_PREFIX_PATH` 指向目标架构安装目录。更新后重复对应构建命令。分支分工：`main` 保留仿真入口，`dev-real` 提供原生模式和真机部署入口。
 
 ## 2. 配置与每个终端的环境
 
