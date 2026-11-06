@@ -14,7 +14,7 @@
 
 ## 1. 依赖与编译
 
-默认两端已经配置 ROS2、CUDA、编译器。额外依赖：colcon/ament、PCL、Eigen3、OpenCV/cv_bridge、OMPL、yaml-cpp、Embree **3**（Orin 必须为 ARM64 构建）、Python NumPy/SciPy、匹配固件的 MicroXRCEAgent。Odin 需要 libusb、OpenCV 及仓库 SDK 所列运行库。模型环境需匹配 JetPack/CUDA 的 PyTorch、SAM 感知依赖；地面预测另需 NKSR、PointNet2 CUDA 扩展及仓库清单中的权重。不要将 x86 虚拟环境或 `.so` 复制到 Orin。
+默认两端已经配置 ROS2、CUDA、编译器。额外依赖：colcon/ament、`colcon-defaults`、Ninja、PCL、Eigen3、OpenCV/cv_bridge、OMPL、yaml-cpp、Embree **3**（Orin 必须为 ARM64 构建）、Python NumPy/SciPy、匹配固件的 MicroXRCEAgent。Odin 需要 libusb、OpenCV 及仓库 SDK 所列运行库。模型环境需匹配 JetPack/CUDA 的 PyTorch、SAM 感知依赖；地面预测另需 NKSR、PointNet2 CUDA 扩展及仓库清单中的权重。不要将 x86 虚拟环境或 `.so` 复制到 Orin。
 
 模型清单：[预测权重](../config/models.json)、[语义资产](../third_party/SAM_AD_Perception/assets.lock.json)、[语义服务 Python 依赖](../third_party/SAM_AD_Perception/requirements-server.txt)。服务依赖清单来自桌面环境；Orin 的 PyTorch/CUDA 和 Python 依赖版本需匹配 JetPack，不照搬桌面的 cu128 环境。地面预测 Python 环境须兼容 ROS2 Humble 的 Python 3.10，并能导入 `rclpy`、`cv_bridge`；语义服务通过 HTTP 连接，可使用独立模型环境。
 
@@ -25,22 +25,17 @@ git clone --branch dev-real https://github.com/Yuan-Lin-Liu/Coal_FlyCo.git coal_
 cd coal_flyco
 cp -n ros2/flyco_real/config/odin.yaml config/vehicle.odin.local.yaml
 source /opt/ros/humble/setup.bash
-export CMAKE_BUILD_PARALLEL_LEVEL=2
 ```
 
-Orin 编译：
+**Orin 和地面电脑使用同一条编译命令**，在工程根目录执行：
 
 ```bash
-COLCON_DEFAULTS_FILE="$PWD/config/colcon_onboard.yaml" colcon --log-base runtime/native/onboard/log build
+colcon build
 ```
 
-地面编译：
+编译结果为根目录的 `build/`、`install/`、`log/`。根目录 `colcon_defaults.yaml` 由 colcon 自动读取，限定 ROS2 包的搜索范围并限制并行编译内存；无需设置 `COLCON_DEFAULTS_FILE`。默认编译 8 个 ROS2 包，包括 Odin 驱动、PX4 消息、FlyCo 算法和真机入口。模块分工由下方各设备的 launch 决定。
 
-```bash
-COLCON_DEFAULTS_FILE="$PWD/config/colcon_ground.yaml" colcon --log-base runtime/native/ground/log build
-```
-
-若 Embree 不在系统搜索路径，编译前设置 `CMAKE_PREFIX_PATH` 指向目标架构安装目录。更新后重复对应构建命令。分支分工：`main` 保留仿真入口，`dev-real` 提供原生模式和真机部署入口。
+Odin SDK 按目标架构选择；Orin 使用目标架构安装的 Embree 3 和 OMPL，x86 仿真主机可复用现有依赖缓存。非系统依赖前缀仍按安装位置设置 `CMAKE_PREFIX_PATH`。更新代码后再次 `colcon build` 即可。构建结构、单包维护和改造前 HEAD 见 [构建说明](build.md)。
 
 ## 2. 配置与每个终端的环境
 
@@ -48,11 +43,11 @@ Orin 每个终端：
 
 ```bash
 source /opt/ros/humble/setup.bash
-source runtime/native/onboard/install/setup.bash
+source install/setup.bash
 export ROS_DOMAIN_ID=0 ROS_LOCALHOST_ONLY=0 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ```
 
-地面每个终端将 `onboard` 改成 `ground`。两端与 PX4 的 `UXRCE_DDS_DOM_ID` 保持一致，两端系统时间同步，DDS 网络互通。
+地面每个终端也使用相同的 `source install/setup.bash`。两端与 PX4 的 `UXRCE_DDS_DOM_ID` 保持一致，两端系统时间同步，DDS 网络互通。
 
 编辑 `config/vehicle.odin.local.yaml`：
 

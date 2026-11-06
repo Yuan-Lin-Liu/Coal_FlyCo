@@ -7,7 +7,7 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 add_compile_options(-Wno-deprecated-declarations -Wno-unused-parameter -fmax-errors=5)
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
-option(FLYCO_BUILD_LEGACY_SIM_CONTROL "Build Pegasus-specific px4ctrl and joystick nodes" ON)
+option(FLYCO_BUILD_LEGACY_SIM_CONTROL "Build Pegasus-specific px4ctrl and joystick nodes" OFF)
 set(ROS_DEPS rclcpp ament_index_cpp std_msgs std_srvs geometry_msgs sensor_msgs nav_msgs
   visualization_msgs rosgraph_msgs geographic_msgs tf2 tf2_ros
   tf2_geometry_msgs tf2_sensor_msgs cv_bridge image_transport message_filters
@@ -23,7 +23,19 @@ if(FLYCO_BUILD_ALGORITHMS)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters kdtree search segmentation surface features)
 find_package(OpenCV REQUIRED)
-find_package(ompl REQUIRED)
+# Prefer target-installed dependencies. Existing x86 simulator checkouts can
+# reuse their local OMPL cache; never use these x86 libraries on ARM/cross builds.
+find_package(ompl QUIET CONFIG)
+if(NOT ompl_FOUND)
+  set(_sim_ompl "${CMAKE_CURRENT_SOURCE_DIR}/../../.local/flyco/deps/root/usr/share/ompl/cmake")
+  if(NOT CMAKE_CROSSCOMPILING AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$"
+      AND EXISTS "${_sim_ompl}/omplConfig.cmake")
+    find_package(ompl REQUIRED CONFIG PATHS "${_sim_ompl}" NO_DEFAULT_PATH)
+    message(STATUS "Using existing simulator OMPL cache: ${ompl_DIR}")
+  else()
+    find_package(ompl REQUIRED CONFIG)
+  endif()
+endif()
 find_package(yaml-cpp REQUIRED)
 find_package(Threads REQUIRED)
 set(P ${CMAKE_CURRENT_SOURCE_DIR}/vendor/planner_simulator/src)

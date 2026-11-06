@@ -41,6 +41,18 @@ NVIDIA 官方容器和安装要求：[Isaac Sim 5.1](https://docs.isaacsim.omniv
 
 `dev-real` 负责 Odin + Orin 原生 ROS2 部署及 PX4 动态 FlyCo 模式，见 [部署说明](docs/deploy_orin.md)。论文要求地面运行预测，Orin 运行定位、感知、规划与轨迹执行；原生 FlyCo 模式已通过起飞、预测、扫描和降落闭环，详见 [验收记录](docs/dev-real-status.md)；Orin/Odin 实机验收待硬件连接后进行。
 
+## dev-real 的标准 ROS2 构建
+
+Orin 和地面电脑在工程根目录使用相同命令；依赖清单见 [真机部署说明](docs/deploy_orin.md)。
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build
+source install/setup.bash
+```
+
+输出为 `build/`、`install/`、`log/`，根目录 `colcon_defaults.yaml` 自动提供默认配置，无需导出 `COLCON_DEFAULTS_FILE`。设备运行分工由 ROS2 launch 选择。[构建与维护说明](docs/build.md) 包含包结构、单包更新及本次改造前的 Git 检查点。
+
 ## 本机原生启动与场景选择
 
 PX4 / QGC 的准备、操作和排查见 [联动快速说明](docs/px4_qgc.md)。本机已有 PX4 SITL 和 QGC 时：

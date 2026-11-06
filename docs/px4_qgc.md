@@ -98,12 +98,12 @@ PX4 参数、飞行日志存于本次 `runtime/run-*/px4/`；`px4_build.json` �
 
 ## 原生 FlyCo 模式仿真：ROS2 终端入口
 
-本机已编译；代码更新后仅更新入口包：
+首次使用标准工作区，或拉取代码更新后，在工程根目录编译：
 
 ```bash
 cd /home/robot/coal_flyco
 source /opt/ros/humble/setup.bash
-COLCON_DEFAULTS_FILE="$PWD/config/colcon_ground.yaml" colcon --log-base runtime/native/ground/log build --packages-select flyco_real
+colcon build
 ```
 
 每个终端先执行：
@@ -111,7 +111,7 @@ COLCON_DEFAULTS_FILE="$PWD/config/colcon_ground.yaml" colcon --log-base runtime/
 ```bash
 cd /home/robot/coal_flyco
 source /opt/ros/humble/setup.bash
-source runtime/native/ground/install/local_setup.bash
+source install/setup.bash
 source /home/robot/px4_slam_ws/install/px4_msgs/share/px4_msgs/local_setup.bash
 export ROS_DOMAIN_ID=64 ROS_LOCALHOST_ONLY=0 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ```

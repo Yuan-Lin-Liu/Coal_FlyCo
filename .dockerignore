@@ -1,6 +1,9 @@
 .git
 .local
 runtime
+build
+install
+log
 logs
 backups
 setup_backups

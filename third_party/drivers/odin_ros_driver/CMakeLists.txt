@@ -104,7 +104,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 # unwind-table flags keep the stack walkable, and CMAKE_ENABLE_EXPORTS adds
 # -rdynamic so symbols pulled in from the static SDK archive land in .dynsym
 # and become visible to dladdr()/backtrace_symbols() at runtime.
-option(ODIN_ENABLE_BACKTRACE "Keep symbols and frame pointers for crash backtraces" ON)
+option(ODIN_ENABLE_BACKTRACE "Keep symbols and frame pointers for crash backtraces" OFF)
 if(ODIN_ENABLE_BACKTRACE)
     set(BACKTRACE_FLAGS "-g -fno-omit-frame-pointer -funwind-tables -fasynchronous-unwind-tables")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${BACKTRACE_FLAGS}")

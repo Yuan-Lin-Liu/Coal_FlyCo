@@ -26,6 +26,7 @@
     "Rectified CameraInfo and optical frame; zero-skew output and full polynomial distortion detection",
     "Runtime-only device calibration and per-session command file",
     "No global pkill on device failures",
-    "Bounded best-effort sensor queues and retained reliable WIWC calibration for late subscribers"
+    "Bounded best-effort sensor queues and retained reliable WIWC calibration for late subscribers",
+    "Default backtrace extras disabled for standard root colcon builds; can be enabled with ODIN_ENABLE_BACKTRACE"
   ]
 }

@@ -73,3 +73,12 @@
 
 - 实际断流注入验收 `run-20261106-162019-35fd28/feedback-loss-verification.json` 为 SUCCESS：正常悬停后，0.45 s PX4 本地位置接收停顿被容忍；随后持续停顿超过 1 s，在约 1.017 s 时请求 Land，实际落地上锁停桨。最高世界高度 2.031 m，ULog 确认未进入 RTL。
 - 当前用户会话已按授权正常落地并结束；定向验收会话也已正常退出。首次验收脚本过早请求解锁被 PX4 拒绝，保留为失败记录；修正为 Position 正常解锁后通过。本轮没有重复完整扫描。
+
+## 标准 colcon 工作区
+
+- 改造前 HEAD 为 `92cb08009b4f6fbc6d42b27e4d1927b71304abd5`，Git 标签 `checkpoint/before-standard-colcon-20261106` 保存该版本。
+- 工程根目录新增自动读取的 `colcon_defaults.yaml`，移除两套需要手动指定的构建配置。两端统一 `colcon build` 和 `source install/setup.bash`，输出为根目录的 `build/`、`install/`、`log/`。
+- 在未加载旧接口或算法覆盖层、未设置 `COLCON_DEFAULTS_FILE` 的新终端中，只 source ROS2 后执行一次全量 `colcon build`：8 个包全部成功，耗时约 13 分 25 秒。源码生成的 Ninja 编译池限制同时编译 2 个源文件。
+- 新安装目录验证通过：8 个包索引、7 个原生可执行程序及依赖库、10 个 launch 入口和真机参数资源。核心算法库、规划器、轨迹服务器的动态符号检查通过；任务 CLI 和模式 launch 参数可正常解析。
+- 编译器输出包含现有 ROS2/PCL 与新版 CMake 的策略提示，以及 x86 Embree/TBB 搜索路径提示；已确认动态库与符号完整。本轮没有重复飞行测试，也没有重新编译已通过的模块。
+- 此次实际构建验证为 x86_64，ARM64 仍需在 Orin 上安装目标架构依赖并执行硬件验收。详细维护方法见 [构建说明](build.md)。验证产物为 `runtime/standard-workspace-verification.json`。

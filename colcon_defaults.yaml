@@ -1,0 +1,37 @@
+# colcon-defaults automatically reads this file from the workspace root.
+# Both computers build the same packages; ROS2 launch selects their runtime role.
+"":
+  log-base: log
+build:
+  base-paths: &package_roots
+    - ros2
+    - third_party/ros_interfaces
+    - third_party/flyco_ros2
+    - third_party/drivers/odin_ros_driver
+    - third_party/px4_msgs
+  build-base: build
+  install-base: install
+  symlink-install: true
+  executor: sequential
+  cmake-args:
+    - -GNinja
+    - -DCMAKE_BUILD_TYPE=Release
+    - -DCMAKE_CXX_FLAGS_RELEASE=-O1
+    # Limit compiler memory use on Orin without requiring shell variables.
+    - -DCMAKE_JOB_POOLS=compile=2;link=1
+    - -DCMAKE_JOB_POOL_COMPILE=compile
+    - -DCMAKE_JOB_POOL_LINK=link
+    - -DPython3_EXECUTABLE=/usr/bin/python3
+    - -DPYTHON_EXECUTABLE=/usr/bin/python3
+    - -DBUILD_TESTING=OFF
+list:
+  base-paths: *package_roots
+graph:
+  base-paths: *package_roots
+info:
+  base-paths: *package_roots
+test:
+  base-paths: *package_roots
+  build-base: build
+  install-base: install
+  executor: sequential
