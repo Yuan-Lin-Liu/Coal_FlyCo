@@ -19,7 +19,7 @@ from builtin_interfaces.msg import Time
 from geometry_msgs.msg import QuaternionStamped, TransformStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CameraInfo, PointCloud2, PointField, Imu, Joy
-from std_msgs.msg import Float32, Bool, String
+from std_msgs.msg import Float32, Bool, String, Header
 from std_srvs.srv import Trigger
 from rosgraph_msgs.msg import Clock
 from mavros_msgs.msg import AttitudeTarget
@@ -299,8 +299,9 @@ class Bridge(Node):
         body_tf.transform.translation.x, body_tf.transform.translation.y, body_tf.transform.translation.z = frame['p']
         body_tf.transform.rotation = q
         self.tf.sendTransform(body_tf)
-        imu = Imu(header=odom.header)
-        imu.header.frame_id = 'base_link'
+        # ROS message fields are shared Python objects on assignment. Keep
+        # the IMU's body header separate from the world pose/TF headers.
+        imu = Imu(header=Header(stamp=stamp(t), frame_id='base_link'))
         imu.orientation = q
         imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z = frame['a']
         imu.angular_velocity.x, imu.angular_velocity.y, imu.angular_velocity.z = frame['g']
@@ -339,7 +340,8 @@ class Bridge(Node):
             points, colors = rgbd_points(depth, rgb, position, rotation, frame['intrinsics'])
             self.rgbcloud.publish(self.pointcloud(points, t, colors))
             tr = TransformStamped()
-            tr.header = odom.header
+            # camera_position/rotation already describe the world pose.
+            tr.header = Header(stamp=stamp(t), frame_id='world')
             tr.child_frame_id = 'camera_optical'
             tr.transform.translation.x, tr.transform.translation.y, tr.transform.translation.z = position.tolist()
             x, y, z, w = Rotation.from_matrix(rotation).as_quat().tolist()
