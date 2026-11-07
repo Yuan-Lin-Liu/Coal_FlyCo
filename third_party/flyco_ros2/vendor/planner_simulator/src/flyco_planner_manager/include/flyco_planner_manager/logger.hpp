@@ -41,7 +41,6 @@
 #include <chrono>
 #include <ctime>
 #include <stdexcept>
-#include <cpuid.h>
 #include <cstdio>
 #include <memory>
 #include <iomanip>
@@ -64,18 +63,28 @@ namespace logger
     
     inline std::string get_cpu_model()
     {
-        std::array<unsigned int, 4> cpui;
-        std::string cpu_info;
+        // Linux exposes CPU information on both x86 and ARM; CPUID is x86-only.
+        std::ifstream cpuinfo("/proc/cpuinfo");
+        std::string line;
+        while (std::getline(cpuinfo, line)) {
+            const auto separator = line.find(':');
+            if (separator == std::string::npos) continue;
 
-        for (int i = 0x80000002; i <= 0x80000004; ++i) {
-            __get_cpuid(i, &cpui[0], &cpui[1], &cpui[2], &cpui[3]);
-            cpu_info += std::string((char*)&cpui[0], 4);
-            cpu_info += std::string((char*)&cpui[1], 4);
-            cpu_info += std::string((char*)&cpui[2], 4);
-            cpu_info += std::string((char*)&cpui[3], 4);
+            std::string key = line.substr(0, separator);
+            const auto key_end = key.find_last_not_of(" \t");
+            if (key_end == std::string::npos) continue;
+            key.erase(key_end + 1);
+            if (key != "model name" && key != "Hardware" && key != "Processor") continue;
+
+            const auto first = line.find_first_not_of(" \t", separator + 1);
+            if (first != std::string::npos) {
+                const auto last = line.find_last_not_of(" \t\r");
+                return line.substr(first, last - first + 1);
+            }
         }
 
-        return cpu_info;
+        struct utsname info {};
+        return uname(&info) == 0 ? info.machine : "Unknown CPU";
     }
 
     inline std::string get_memory_info() 

@@ -36,7 +36,15 @@ source install/setup.bash
 colcon build --packages-select flyco_real
 ```
 
-查看实际包列表用 `colcon list`，查看依赖关系用 `colcon graph`。构建错误先看 `log/latest_build/<包名>/stderr.log`。
+查看实际包列表用 `colcon list`，查看依赖关系用 `colcon graph`。构建错误先看 `log/latest_build/<包名>/stdout_stderr.log`；Ninja 的编译器错误可能输出到 stdout，仅看终端的 stderr 摘要会漏掉原因。
+
+如果前 6 个包已完成、`flyco_ros2` 失败，修复后只续编剩余两个包，保留已有缓存：
+
+```bash
+colcon build --packages-select flyco_ros2 flyco_real --event-handlers console_direct+
+```
+
+确认两个包都显示 `Finished` 后再加载 `install/setup.bash`。安装 Embree 等依赖成功不代表这两个 ROS2 包已经安装完成；构建失败时缺少 `local_setup.bash` 是后续结果。设备信息日志使用 `/proc/cpuinfo`，缺少型号时回退到系统架构，不依赖 x86 的 `cpuid.h`。
 
 原有 `.local/flyco` 仿真构建仍由 `tools/setup_flyco.sh` 显式启用旧控制节点；该兼容入口与根目录标准构建分别维护输出。原生仿真优先加载新的 `install/local_setup.bash`。
 
