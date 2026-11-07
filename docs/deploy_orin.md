@@ -37,6 +37,45 @@ colcon build
 
 Odin SDK 按目标架构选择；Orin 使用目标架构安装的 Embree 3 和 OMPL，x86 仿真主机可复用现有依赖缓存。非系统依赖前缀仍按安装位置设置 `CMAKE_PREFIX_PATH`。更新代码后再次 `colcon build` 即可。构建结构、单包维护和改造前 HEAD 见 [构建说明](build.md)。
 
+### PX4 固件与消息版本
+
+工程内 `third_party/px4_msgs` 已从本机 `/home/robot/PX4-Autopilot` 同步：
+`NextFlightLab/PX4-Autopilot`、`feature/neural`、提交
+`0d092a91f0c0417ab888b4bc37331484e6d46b9d`，出处见
+[SOURCE.json](../third_party/px4_msgs/SOURCE.json)。注册请求/回复、解锁检查请求/回复、
+本地位置采用版本 1；节点根据消息常量自动使用 `_v1` 话题。PX4 ROS2 模式 API
+版本仍是消息定义中的 `1`，它与固件版本号 `1.17` 是不同的编号。
+
+已部署的旧工作区更新后，停止旧的 FlyCo ROS2 节点，在 Orin 和地面电脑各自执行一次增量编译：
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --packages-select px4_msgs flyco_real --cmake-force-configure
+source install/setup.bash
+```
+
+不需要重编已通过的 `flyco_ros2` 算法。所有运行终端重新加载更新后的环境，避免继续导入
+旧工作区的 `px4_msgs`。保持与飞控一致的 ROS 域；例如已使用域 66 的现场终端继续使用 66。
+
+对于实机报告的 `feature/vv_agentic` / `f026a1d46ea94233da7b6d8ba4675c72a8cbc300`，
+其提交号与上述源码不同，不能仅凭“v1.17”判定兼容。Agent 与飞控 DDS client 已连接后执行：
+
+```bash
+ros2 run flyco_real check_px4.py
+```
+
+这个节点读取已安装消息的字段定义，通过 PX4 `MessageFormatRequest/Response` 协议核对
+FlyCo 使用的 15 个消息接口的字段哈希，并检查对应版本的 DDS 发布/订阅端点。
+它只发送格式查询，不解锁、不切换模式、不发送飞行设定值。
+自定义前缀可通过 `--ros-args -p px4_topic_prefix:=/uav1/fmu` 指定。
+全部通过时输出 `PX4 message check passed (15 interfaces)`；不一致、缺少端点或超时则退出码为 1。
+若不一致，应从实际编译该固件的源码同步整套消息，不能只手动改 `_v1` 后缀。
+
+检查通过后，按下文运行 `mode.launch.py`，确认日志出现
+`Registered FlyCo: nav_state=...`。注册成功只证明外部模式已创建；定位、地面心跳和解锁条件
+继续由原有检查决定。若本地位置的 `ref_alt` 为 NaN，当前原生 Takeoff 入口会拒绝自动起飞，
+需要先完成高度参考配置。
+
 ## 2. 每个终端的环境与设备配置
 
 Orin 和地面电脑每个终端先加载环境：

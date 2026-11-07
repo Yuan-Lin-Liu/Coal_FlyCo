@@ -11,7 +11,8 @@ from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy
 from nav_msgs.msg import Odometry
 from px4_msgs.msg import (VehicleStatus, VehicleLocalPosition, VehicleOdometry, VehicleCommand,
                          VehicleCommandAck, TrajectorySetpoint, OffboardControlMode,
-                         RegisterExtComponentRequest, RegisterExtComponentReply, VehicleControlMode, ModeCompleted)
+                         RegisterExtComponentRequest, RegisterExtComponentReply, VehicleControlMode, ModeCompleted,
+                         ArmingCheckRequest, ArmingCheckReply)
 from quadrotor_msgs.msg import PositionCommand
 from std_msgs.msg import Empty, String
 from std_srvs.srv import SetBool, Trigger
@@ -52,8 +53,10 @@ class DDSFixture:
                        mode=VehicleStatus.NAVIGATION_STATE_POSCTL,valid=True,reset=0,clock_offset=0.,
                        ack=VehicleCommandAck.VEHICLE_CMD_RESULT_ACCEPTED,wrong_ack_target=False,ack_future=False,failsafe=False)
         self.odom=self.node.create_publisher(Odometry,'/flyco/odom',qos_profile_sensor_data)
-        self.local=self.node.create_publisher(VehicleLocalPosition,'/fmu/out/vehicle_local_position',qos_profile_sensor_data)
-        self.state=self.node.create_publisher(VehicleStatus,'/fmu/out/vehicle_status_v1',qos_profile_sensor_data)
+        self.local=self.node.create_publisher(VehicleLocalPosition,
+            topic('/fmu','out','vehicle_local_position',VehicleLocalPosition),qos_profile_sensor_data)
+        self.state=self.node.create_publisher(VehicleStatus,
+            topic('/fmu','out','vehicle_status',VehicleStatus),qos_profile_sensor_data)
         self.ground=self.node.create_publisher(Empty,'/flyco/ground/heartbeat',1)
         self.command=self.node.create_publisher(PositionCommand,'/planning/pos_cmd',10)
         self.ack=self.node.create_publisher(VehicleCommandAck,'/fmu/out/vehicle_command_ack',qos_profile_sensor_data)
@@ -73,6 +76,7 @@ class DDSFixture:
     def on_registration(self,msg):
         assert bytes(msg.name).rstrip(b'\0') == b'FlyCo'
         assert msg.register_mode and msg.register_arming_check and not msg.enable_replace_internal_mode
+        assert not msg.not_user_selectable
         self.registration_reply.publish(RegisterExtComponentReply(
             timestamp=self.node.get_clock().now().nanoseconds//1000, request_id=msg.request_id,
             name=msg.name, success=True, arming_check_id=0, mode_id=23, mode_executor_id=1,
@@ -145,6 +149,26 @@ def dds():
     rclpy.init(); fixture=DDSFixture()
     try: yield fixture
     finally: fixture.close();rclpy.shutdown()
+
+
+def test_v1_registration_and_arming_checks_without_flight_commands(dds):
+    assert topic('/fmu','in','register_ext_component_request',RegisterExtComponentRequest) == '/fmu/in/register_ext_component_request_v1'
+    assert topic('/fmu','out','register_ext_component_reply',RegisterExtComponentReply) == '/fmu/out/register_ext_component_reply_v1'
+    assert topic('/fmu','out','vehicle_local_position',VehicleLocalPosition) == '/fmu/out/vehicle_local_position_v1'
+    replies = []
+    dds.node.create_subscription(ArmingCheckReply, '/fmu/in/arming_check_reply_v1',
+                                 replies.append, qos_profile_sensor_data)
+    checks = dds.node.create_publisher(ArmingCheckRequest, '/fmu/out/arming_check_request_v1', 1)
+    dds.spin(.6)
+    assert dds.bridge.flight_mode.mode_id == 23
+    assert dds.bridge.flight_mode.executor_id == 1
+    assert dds.bridge.local is not None
+    checks.publish(ArmingCheckRequest(request_id=7, valid_registrations_mask=1))
+    dds.spin(.2)
+    assert replies and replies[-1].request_id == 7 and replies[-1].registration_id == 0
+    assert not replies[-1].can_arm_and_run
+    assert replies[-1].mode_req_local_position and replies[-1].mode_req_attitude
+    assert dds.requests == [] and not dds.bridge.enabled
 
 
 def test_dds_setpoints_gating_and_watchdogs(dds):

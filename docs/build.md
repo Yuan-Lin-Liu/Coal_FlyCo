@@ -38,6 +38,17 @@ colcon build --packages-select flyco_real
 
 查看实际包列表用 `colcon list`，查看依赖关系用 `colcon graph`。构建错误先看 `log/latest_build/<包名>/stdout_stderr.log`；Ninja 的编译器错误可能输出到 stdout，仅看终端的 stderr 摘要会漏掉原因。
 
+PX4 消息定义更新后，仅需构建消息与适配入口；强制重新配置 CMake 以识别新增/移除的消息文件：
+
+```bash
+colcon build --packages-select px4_msgs flyco_real --cmake-force-configure
+source install/setup.bash
+```
+
+节点会依据消息中的 `MESSAGE_VERSION` 选择 DDS 后缀。自定义固件还需要在 Agent 连通后运行
+`ros2 run flyco_real check_px4.py` 校验字段和 DDS 端点，详情见
+[固件与消息版本](deploy_orin.md#px4-固件与消息版本)。
+
 如果前 6 个包已完成、`flyco_ros2` 失败，修复后只续编剩余两个包，保留已有缓存：
 
 ```bash

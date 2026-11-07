@@ -1,4 +1,5 @@
-# PX4 v1.16 native DDS. Device calibration is read from Odin automatically.
+# PX4 native DDS; use the firmware message definitions pinned in third_party/px4_msgs.
+# Device calibration is read from Odin automatically.
 # Confirm vehicle mounting frames and network settings at hardware deployment.
 deployment:
   profile: odin

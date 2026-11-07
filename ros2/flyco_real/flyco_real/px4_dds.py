@@ -10,7 +10,7 @@ FRD_TO_FLU = np.diag([1., -1., -1.])
 
 
 def topic(prefix, direction, name, message_type):
-    """PX4 v1.16 adds _vN only to versioned messages (e.g. VehicleStatus v1)."""
+    """Use the installed message version for DDS names; version 0 has no suffix."""
     version = int(getattr(message_type, 'MESSAGE_VERSION', 0))
     suffix = '_v%d' % version if version else ''
     return '/' + prefix.strip('/') + '/' + direction + '/' + name + suffix

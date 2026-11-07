@@ -54,7 +54,8 @@ class FlyCoMode:
         msg = RegisterExtComponentRequest(timestamp=self.node.timestamp_us(),
             request_id=self.request_id,
             px4_ros2_api_version=RegisterExtComponentRequest.LATEST_PX4_ROS2_API_VERSION,
-            register_arming_check=True, register_mode=True, register_mode_executor=True)
+            register_arming_check=True, register_mode=True, register_mode_executor=True,
+            not_user_selectable=False)
         msg.name = list(b'FlyCo'+bytes(20))
         self.register.publish(msg)
         self.last_request = now
