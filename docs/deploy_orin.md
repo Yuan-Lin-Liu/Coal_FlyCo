@@ -57,24 +57,17 @@ source install/setup.bash
 不需要重编已通过的 `flyco_ros2` 算法。所有运行终端重新加载更新后的环境，避免继续导入
 旧工作区的 `px4_msgs`。保持与飞控一致的 ROS 域；例如已使用域 66 的现场终端继续使用 66。
 
-对于实机报告的 `feature/vv_agentic` / `f026a1d46ea94233da7b6d8ba4675c72a8cbc300`，
-其提交号与上述源码不同，不能仅凭“v1.17”判定兼容。Agent 与飞控 DDS client 已连接后执行：
+Agent 与飞控 DDS client 已连接后，直接启动注册与使能节点：
 
 ```bash
-ros2 run flyco_real check_px4.py
+ros2 launch flyco_real mode.launch.py
 ```
 
-这个节点读取已安装消息的字段定义，通过 PX4 `MessageFormatRequest/Response` 协议核对
-FlyCo 使用的 15 个消息接口的字段哈希，并检查对应版本的 DDS 发布/订阅端点。
-它只发送格式查询，不解锁、不切换模式、不发送飞行设定值。
-自定义前缀可通过 `--ros-args -p px4_topic_prefix:=/uav1/fmu` 指定。
-全部通过时输出 `PX4 message check passed (15 interfaces)`；不一致、缺少端点或超时则退出码为 1。
-若不一致，应从实际编译该固件的源码同步整套消息，不能只手动改 `_v1` 后缀。
-
-检查通过后，按下文运行 `mode.launch.py`，确认日志出现
-`Registered FlyCo: nav_state=...`。注册成功只证明外部模式已创建；定位、地面心跳和解锁条件
-继续由原有检查决定。若本地位置的 `ref_alt` 为 NaN，当前原生 Takeoff 入口会拒绝自动起飞，
-需要先完成高度参考配置。
+看到 `Registered FlyCo: nav_state=...` 表示模式注册成功；定位、地面心跳和解锁条件
+继续由原有检查决定。注册失败时，在另一终端运行 `ros2 run flyco_real task.py status`，
+查看 `registration_issue`。实机报告的 `feature/vv_agentic` / `f026a1d...` 与同步源码提交不同，
+若出现消息版本问题，应使用实际编译该固件的消息定义，不能只修改话题后缀。
+若本地位置的 `ref_alt` 为 NaN，当前原生 Takeoff 入口会拒绝自动起飞，需要先完成高度参考配置。
 
 ## 2. 每个终端的环境与设备配置
 
