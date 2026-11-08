@@ -11,6 +11,14 @@ The following upstream README is retained for reference.
 
 # px4_msgs
 
+本工程的消息来自 `NextFlightLab/PX4-Autopilot` 的 `feature/neural`，提交
+`0d092a91f0c0417ab888b4bc37331484e6d46b9d`（PX4 v1.17 自定义固件源码）。
+已将该源码的 `msg/`、`msg/versioned/` 展平同步到本包，具体出处见
+[SOURCE.json](SOURCE.json)。本包不再使用原先的 `release/1.16` 定义。
+编译后直接使用 `ros2 launch flyco_real mode.launch.py` 注册 FlyCo。
+自定义固件应使用对应的消息定义；注册失败时的排查方法见
+[部署说明](../../docs/deploy_orin.md#px4-固件与消息版本)。下面保留上游使用说明。
+
 [![GitHub license](https://img.shields.io/github/license/PX4/px4_msgs.svg)](https://github.com/PX4/px4_msg/blob/master/LICENSE) [![Build package](https://github.com/PX4/px4_msgs/workflows/Build%20package/badge.svg)](https://github.com/PX4/px4_msgs/actions)
 
 [![Discord Shield](https://discordapp.com/api/guilds/1022170275984457759/widget.png?style=shield)](https://discord.gg/dronecode)

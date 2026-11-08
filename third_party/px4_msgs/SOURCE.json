@@ -1,5 +1,5 @@
 {
-  "upstream": "https://github.com/PX4/PX4-Autopilot",
+  "upstream": "https://github.com/NextFlightLab/PX4-Autopilot",
   "source_tree": "/home/lyl/PX4-Autopilot",
   "branch": "feature/neural",
   "commit": "0d092a91f0c0417ab888b4bc37331484e6d46b9d",
@@ -7,12 +7,7 @@
   "reported_firmware_commit": "f026a1d46ea94233da7b6d8ba4675c72a8cbc300",
   "note": "Message definitions are vendored directly from the provided checkout. The reported flight-controller commit differs; live FCU registration remains to be verified.",
   "package_scaffold": "PX4/px4_msgs release/1.16 at 392e831c1f659429ca83902e66820d7094591410",
-  "retained_legacy_messages": [
-    "AckermannVelocitySetpoint.msg",
-    "DifferentialVelocitySetpoint.msg",
-    "NpfgStatus.msg",
-    "RoverVelocityStatus.msg"
-  ],
+  "retained_legacy_messages": [],
   "definitions_sha256": {
     "msg/ActionRequest.msg": "d699b8df02823202cf5268d8bb9dc7a1e9f02dca5b21be8d3fe8a418766bbc9b",
     "msg/ActuatorArmed.msg": "a9cfd38bd9722ee3f34ba32587ac6542dd70f06a5eda7854f3685e7a6f5cf740",
@@ -253,5 +248,10 @@
     "msg/versioned/VtolVehicleStatus.msg": "7bb9521193128f01902f157fa78b93978473f61e9e7384c15073e4a5133b5c81",
     "msg/versioned/Wind.msg": "c1850989e1e5c9c87ef5ef02d54e5190b9c1398045495716b4c787f4ad31d9e9",
     "srv/VehicleCommand.srv": "86e14ec9e82dd69a1390406f1fa1ac3e91895031966f23f24de4351bb9af4424"
-  }
+  },
+  "source_layout": [
+    "msg/*.msg",
+    "msg/versioned/*.msg",
+    "srv/*.srv"
+  ]
 }
