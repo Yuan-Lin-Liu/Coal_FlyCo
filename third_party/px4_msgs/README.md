@@ -1,3 +1,14 @@
+# Coal_FlyCo firmware snapshot
+
+The message definitions in this copy are vendored from the provided PX4 1.17
+custom firmware checkout (`feature/neural`, commit
+`0d092a91f0c0417ab888b4bc37331484e6d46b9d`). See `SOURCE.json` for the source
+file checksums and the original ROS package scaffold revision. Build this
+package with the other workspace packages using `colcon build` at the project
+root. FlyCo uses these versioned DDS interfaces directly.
+
+The following upstream README is retained for reference.
+
 # px4_msgs
 
 [![GitHub license](https://img.shields.io/github/license/PX4/px4_msgs.svg)](https://github.com/PX4/px4_msg/blob/master/LICENSE) [![Build package](https://github.com/PX4/px4_msgs/workflows/Build%20package/badge.svg)](https://github.com/PX4/px4_msgs/actions)
@@ -54,4 +65,3 @@ Use the [Issues](https://github.com/PX4/px4_msgs/issues) section to create a new
 ## Questions and troubleshooting
 
 Reach the PX4 development team on the [PX4 Discord Server](https://discord.gg/dronecode).
-

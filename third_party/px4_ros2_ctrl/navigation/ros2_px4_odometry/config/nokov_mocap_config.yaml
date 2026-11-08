@@ -1,0 +1,6 @@
+/**:
+    ros__parameters:
+      message_type: "pose_stamped"
+      odometry_topic: "/Robot_1/pose"
+      extrinsic_translation: [0.0, 0.0, 0.0]
+      extrinsic_rotation_matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]

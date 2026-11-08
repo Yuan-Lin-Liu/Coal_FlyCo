@@ -43,22 +43,48 @@ def prepare_parameters(flyco_share, libexec, hardware_file, runtime_root):
     for key, value in overrides.items():
         params.setdefault(key.lstrip('/'), {}).update(value.get('ros__parameters', {}))
     prefix = overrides.get('deployment', {}).get('px4_topic_prefix', '/fmu')
-    for name in ('px4_bridge', 'sensor_bridge'):
-        params[name]['px4_topic_prefix'] = prefix
-    # Older local profiles keep their mounting calibration; obsolete MAVROS
-    # endpoint keys must not redirect the native DDS provider.
+    params['px4_bridge']['px4_topic_prefix'] = prefix
+    # Existing vehicle files may still use the removed sensor_bridge section.
+    # Keep its camera/cloud settings. The new odin_config.yaml owns the
+    # odometry input, rate and variance policy.
+    legacy = params.pop('sensor_bridge', {})
+    perception = {**legacy, **params.get('perception_bridge', {})}
+    params['perception_bridge'] = perception
+    forward = params.setdefault('generic_odometry_node', {})
+    forward.setdefault('output_frame', perception.get('world_frame', 'world'))
+    forward.setdefault('output_child_frame', perception.get('body_frame', 'base_link'))
+    forward.setdefault('odometry_output_topic', '/flyco/odom')
+    if not prefix.rstrip('/').endswith('/fmu'):
+        raise ValueError('px4_topic_prefix must end in /fmu')
+    forward.setdefault('topic_namespace_prefix', prefix.rstrip('/')[:-3])
+    from .geometry import transform_matrix
+    alignment = transform_matrix(perception.get('world_from_lio_translation', [0., 0., 0.]),
+                                 perception.get('world_from_lio_quaternion', [0., 0., 0., 1.]))
+    forward.setdefault('extrinsic_translation', alignment[:3, 3].tolist())
+    forward.setdefault('extrinsic_rotation_matrix', alignment[:3, :3].reshape(-1).tolist())
+    if overrides.get('deployment', {}).get('profile') == 'odin':
+        # Odin's IMU origin is the vehicle origin: no mounting TF or lever arm.
+        # Normalize older local profiles too, without rewriting vehicle settings.
+        perception.update(
+            input_camera_frame='odin_camera_optical_frame',
+            camera_optical_frame='camera_0')
+    # Obsolete MAVROS endpoint keys must not redirect the native DDS provider.
     params['px4_bridge'].pop('mavros_ns', None)
-    params['sensor_bridge'].pop('external_vision_topic', None)
+    for key in ('odom_topic', 'odom_publish_rate', 'publish_external_vision', 'external_vision_topic',
+                'external_vision_frame', 'pose_variances', 'odometry_is_body_frame', 'lio_child_frame',
+                'lio_twist_frame', 'px4_topic_prefix'):
+        perception.pop(key, None)
     # Only installed hardware-role nodes get parameters; legacy simulation
     # controllers and ground-truth RGB mapping are deliberately absent.
     names = {'flyco_planner', 'traj_server', 'sam_tracking', 'sam_tracking_node',
-             'tracking_prompt', 'prompt_ui', 'mesh_predict_node', 'sensor_bridge', 'px4_bridge', 'odin_adapter'}
+             'tracking_prompt', 'prompt_ui', 'mesh_predict_node', 'perception_bridge',
+             'generic_odometry_node', 'px4_bridge'}
     params = {name: values for name, values in params.items() if name in names}
     for values in params.values():
         values['use_sim_time'] = False
-    if params['sensor_bridge'].get('world_frame') != 'world':
+    if perception.get('world_frame', 'world') != 'world':
         raise ValueError('The planner uses world as its map frame; configure world_from_lio instead')
-    camera_frame = params['sensor_bridge']['camera_optical_frame']
+    camera_frame = perception['camera_optical_frame']
     params['sam_tracking']['camera_optical_frame'] = camera_frame
     params['sam_tracking']['airsim_camera_optical_frame'] = camera_frame
     runtime_root = Path(runtime_root).expanduser()

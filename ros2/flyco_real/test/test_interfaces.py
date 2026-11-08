@@ -42,68 +42,13 @@ def test_invalid_commands_and_time():
     assert not fresh(None, 1., .3)
 
 
-def test_real_sensor_lever_arm_and_qos():
-    from geometry_msgs.msg import TransformStamped
-    from sensor_msgs.msg import PointCloud2
-    from sensor_msgs_py import point_cloud2
-    from tf2_ros import StaticTransformBroadcaster
-    from std_msgs.msg import Header
-    from flyco_real.sensor_bridge import SensorBridge
-    rclpy.init()
-    bridge, fake = SensorBridge(), Node('fake_lio_driver')
-    executor = SingleThreadedExecutor()
-    executor.add_node(bridge)
-    executor.add_node(fake)
-    outputs, clouds, external = [], [], []
-    odom_pub = fake.create_publisher(Odometry, '/Odometry', qos_profile_sensor_data)
-    cloud_pub = fake.create_publisher(PointCloud2, '/cloud_registered', qos_profile_sensor_data)
-    fake.create_subscription(Odometry, '/flyco/odom', outputs.append, 10)
-    fake.create_subscription(PointCloud2, '/flyco/lidar/world', clouds.append, 10)
-    fake.create_subscription(VehicleOdometry, '/fmu/in/vehicle_visual_odometry', external.append, 10)
-    broadcaster = StaticTransformBroadcaster(fake)
-    imu = TransformStamped()
-    imu.header.frame_id, imu.child_frame_id = 'base_link', 'imu_link'
-    imu.transform.translation.x, imu.transform.rotation.w = .2, 1.
-    camera = TransformStamped()
-    camera.header.frame_id, camera.child_frame_id = 'base_link', 'camera_optical_frame'
-    camera.transform.rotation.x, camera.transform.rotation.y = -.5, .5
-    camera.transform.rotation.z, camera.transform.rotation.w = -.5, .5
-    broadcaster.sendTransform([imu, camera])
-    def publish():
-        stamp = fake.get_clock().now().to_msg()
-        msg = Odometry(header=Header(stamp=stamp, frame_id='camera_init'), child_frame_id='imu_link')
-        msg.pose.pose.position.x, msg.pose.pose.orientation.w = 1., 1.
-        odom_pub.publish(msg)
-        cloud_pub.publish(point_cloud2.create_cloud_xyz32(msg.header, [[1., 2., 3.]]))
-    timer = fake.create_timer(.03, publish)
-    try:
-        deadline = time.monotonic() + 3.
-        while time.monotonic() < deadline and not (outputs and clouds and external):
-            executor.spin_once(timeout_sec=.02)
-        assert outputs and clouds and external
-        assert outputs[-1].pose.pose.position.x == pytest.approx(.8)
-        assert outputs[-1].header.frame_id == 'world'
-        assert outputs[-1].child_frame_id == 'base_link'
-        assert np.allclose(external[-1].position, [0.,.8,0.])
-        assert external[-1].position_variance[0] > 0.
-        assert clouds[-1].header.frame_id == 'world'
-        assert np.allclose(point_cloud2.read_points(clouds[-1], field_names=('x','y','z')).tolist(), [[1.,2.,3.]])
-    finally:
-        executor.remove_node(fake)
-        executor.remove_node(bridge)
-        fake.destroy_node()
-        bridge.destroy_node()
-        executor.shutdown()
-        rclpy.shutdown()
-
-
 def test_raw_camera_rectification_preserves_optical_center():
     from sensor_msgs.msg import CameraInfo, Image
     from std_msgs.msg import Header
     from cv_bridge import CvBridge
-    from flyco_real.sensor_bridge import SensorBridge
+    from flyco_real.perception_bridge import PerceptionBridge
     rclpy.init()
-    bridge, fake = SensorBridge(), Node('camera_probe')
+    bridge, fake = PerceptionBridge(), Node('camera_probe')
     bridge.image_is_rectified = False
     executor = SingleThreadedExecutor()
     executor.add_node(bridge)

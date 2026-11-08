@@ -31,6 +31,8 @@ def build(context):
     odin_share = Path(get_package_share_directory('odin_ros_driver'))
     control = yaml.safe_load((odin_share / 'config/control_command.yaml').read_text())
     control['register_keys'].update(settings.get('odin', {}).get('register_keys', {}))
+    # Use Odin's native odom/IMU/LiDAR/camera TF instead of a second extrinsics node.
+    control['register_keys']['send_odom_baselink_tf'] = 1
     control_file = run / 'odin_control.yaml'
     control_file.write_text(yaml.safe_dump(control, sort_keys=False))
     calibration = run / 'odin'
@@ -43,12 +45,13 @@ def build(context):
                       parameters=[{'config_file': str(control_file)}], output='screen')
         actions.append(driver)
         critical.append(driver)
-    adapter = Node(package='flyco_real', executable='odin_adapter.py', name='odin_adapter',
-                   parameters=[str(params)], output='screen')
-    actions.append(adapter)
-    critical.append(adapter)
     if role == 'sensors':
-        sensor = Node(package='flyco_real', executable='sensor_bridge.py', name='sensor_bridge',
+        odometry = Node(package='ros2_px4_odometry', executable='odom_to_px4_node',
+                        name='generic_odometry_node', parameters=[
+                            LaunchConfiguration('odometry_config').perform(context), str(params)], output='screen')
+        actions.append(odometry)
+        critical.append(odometry)
+        sensor = Node(package='flyco_real', executable='perception_bridge.py', name='perception_bridge',
                       parameters=[str(params)], output='screen')
         actions.append(sensor)
         critical.append(sensor)
@@ -56,6 +59,7 @@ def build(context):
     else:
         actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share / 'launch/native.launch.py')),
             launch_arguments={**common, 'role': 'onboard', 'runtime_root': str(run / 'algorithm'),
+                              'odometry_config': LaunchConfiguration('odometry_config').perform(context),
                               'start_mode': LaunchConfiguration('start_mode').perform(context)}.items()))
     for process in critical:
         actions.append(RegisterEventHandler(OnProcessExit(target_action=process,
@@ -69,6 +73,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('role', default_value='onboard'),
         DeclareLaunchArgument('config', default_value=str(share / 'config/odin.yaml')),
+        DeclareLaunchArgument('odometry_config', default_value=str(
+            Path(get_package_share_directory('ros2_px4_odometry')) / 'config/odin_config.yaml')),
         DeclareLaunchArgument('runtime_root', default_value=str(Path.home() / '.ros/coal-flyco')),
         DeclareLaunchArgument('start_driver', default_value='true'),
         DeclareLaunchArgument('start_mode', default_value='true'),

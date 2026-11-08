@@ -1,5 +1,5 @@
-# PX4 v1.16 native DDS. Device calibration is read from Odin automatically.
-# Confirm vehicle mounting frames and network settings at hardware deployment.
+# PX4 1.17 custom native DDS; matching messages are bundled in third_party/px4_msgs.
+# Odin's IMU and vehicle body share the same origin and axes (zero mounting offset).
 deployment:
   profile: odin
   ros_domain_id: 0
@@ -17,7 +17,7 @@ odin:
     sendrgbcompressed: 0
     sendimu: 1
     sendodom: 1
-    send_odom_baselink_tf: 0
+    send_odom_baselink_tf: 1
     tf_extra_publish_rate: 0
     sendcloudslam: 1
     sendcloudrender: 0
@@ -28,38 +28,19 @@ odin:
     devstatuslog: 0
     showpath: 0
     showcamerapose: 0
-odin_adapter:
-  ros__parameters:
-    body_frame: base_link
-    imu_frame: imu
-    lidar_frame: lidar
-    camera_optical_frame: odin_camera_optical_frame
-    # Vehicle mounting transform: T_base_link_imu, metres and XYZW quaternion.
-    # Odin's internal IMU/LiDAR/camera calibration comes from /odin1/wiwc.
-    # These identity values only apply when base_link and the IMU frame coincide.
-    body_to_imu_translation:
-    - 0.0
-    - 0.0
-    - 0.0
-    body_to_imu_quaternion:
-    - 0.0
-    - 0.0
-    - 0.0
-    - 1.0
-sensor_bridge:
+perception_bridge:
   ros__parameters:
     use_sim_time: false
-    odom_topic: /odin1/odometry_highfreq
     cloud_topic: /odin1/cloud_slam
     image_topic: /odin1/image/undistorted
     camera_info_topic: /odin1/camera_info
     image_is_rectified: true
     lio_parent_frame: odom
-    lio_child_frame: imu
-    lio_twist_frame: child
     world_frame: world
     body_frame: base_link
-    camera_optical_frame: odin_camera_optical_frame
+    # Native Odin camera_0 TF is optical; the driver image header uses another name.
+    camera_optical_frame: camera_0
+    input_camera_frame: odin_camera_optical_frame
     world_from_lio_translation:
     - 0.0
     - 0.0
@@ -69,18 +50,8 @@ sensor_bridge:
     - 0.0
     - 0.0
     - 1.0
-    publish_external_vision: true
-    external_vision_frame: FRD  # Arbitrary SLAM heading; NED requires North alignment.
-    pose_variances:
-    - 0.04
-    - 0.04
-    - 0.09
-    - 0.01
-    - 0.01
-    - 0.02
     max_sensor_age: 0.4
     cloud_voxel_size: 0.15
-    odom_publish_rate: 50.0
     px4_topic_prefix: /fmu
 px4_bridge:
   ros__parameters:
@@ -110,7 +81,7 @@ sam_tracking:
     segmentation_backend: semantic
     segmentation_endpoint: http://127.0.0.1:8851
     segmentation_timeout: 3.0
-    camera_optical_frame: odin_camera_optical_frame
+    camera_optical_frame: camera_0
     cloud_sync_slop: 0.08
     min_height: 0.25
 flyco_planner:

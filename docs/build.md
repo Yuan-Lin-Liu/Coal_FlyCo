@@ -10,6 +10,8 @@ source install/setup.bash
 
 Orin 和地面电脑都构建完整工作区，由 launch 选择运行模块。无需构建脚本，也无需设置 `COLCON_DEFAULTS_FILE`。已有的旧 `runtime/native/*/install` 可以保留，新终端统一加载根目录 `install/setup.bash`。
 
+PX4 1.17 定制固件的消息定义已直接放入 `third_party/px4_msgs`，构建不读取电脑外部的 PX4 源码目录，也不下载消息或启动转换节点。定义来源及文件校验和见该包 `SOURCE.json`，并随包安装。更新消息文件后，CMake 自动重新生成接口，仍使用上述同一条 `colcon build` 命令。
+
 ## 目录与包
 
 | 位置 | 内容 |

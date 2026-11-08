@@ -1,114 +1,138 @@
-"""Odin live-calibration transport, body origin and time/rate normalization."""
+"""Exercise the imported C++ Odin forwarder and the separate perception process."""
 import copy
+import math
+import os
+import signal
+import subprocess
 import time
+from pathlib import Path
+
 import numpy as np
-import pytest
 import rclpy
 import yaml
-from pathlib import Path
 from ament_index_python.packages import get_package_share_directory
-from rclpy.node import Node
-from rclpy.executors import SingleThreadedExecutor
-from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy, ReliabilityPolicy
+from geometry_msgs.msg import QuaternionStamped, TransformStamped
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image, CameraInfo, PointCloud2
 from px4_msgs.msg import VehicleOdometry
-from std_msgs.msg import Header
-from sensor_msgs_py import point_cloud2
-from tf2_ros import Buffer, TransformListener
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
-from flyco_real.odin_adapter import OdinAdapter, sdk_extrinsic
-from flyco_real.sensor_bridge import SensorBridge
-from flyco_real.geometry import transform_matrix, tf_matrix
+from sensor_msgs.msg import CameraInfo, Image, PointCloud2
+from sensor_msgs_py import point_cloud2
+from std_msgs.msg import Header
+from tf2_ros import Buffer, TransformBroadcaster, TransformListener
+
+from flyco_real.geometry import tf_matrix
 
 
-def test_wiwc_rejects_invalid_rigid_calibration():
-    for matrix in (np.zeros((4, 4)), np.diag([2., 1., 1., 1.]),
-                   np.diag([-1., 1., 1., 1.]), np.full((4, 4), np.nan)):
-        with pytest.raises(ValueError): sdk_extrinsic(matrix.flatten())
-    assert np.array_equal(sdk_extrinsic(np.eye(4).flatten()), np.eye(4))
+def test_cpp_odin_forwarding_and_perception(tmp_path):
+    share = Path(get_package_share_directory('flyco_real'))
+    profile = yaml.safe_load((share / 'config/odin.yaml').read_text())
+    config = tmp_path / 'vehicle.yaml'
+    config.write_text(yaml.safe_dump(profile))
+    log_path = tmp_path / 'launch.log'
+    rclpy.init()
+    fake = Node('odin_cpp_pipeline_probe')
+    outputs, visions, clouds, images, infos, feedback = [], [], [], [], [], []
+    fake.create_subscription(Odometry, '/flyco/odom', outputs.append, 10)
+    fake.create_subscription(VehicleOdometry, '/fmu/in/vehicle_visual_odometry', visions.append, 10)
+    fake.create_subscription(PointCloud2, '/flyco/lidar/world', clouds.append, 10)
+    fake.create_subscription(Image, '/flyco/camera/rgb', images.append, 10)
+    fake.create_subscription(CameraInfo, '/flyco/camera/info', infos.append, 10)
+    fake.create_subscription(QuaternionStamped, '/flyco/gimbal_pose', feedback.append, 10)
+    odom = fake.create_publisher(Odometry, '/odin1/odometry_highfreq', qos_profile_sensor_data)
+    cloud = fake.create_publisher(PointCloud2, '/odin1/cloud_slam', qos_profile_sensor_data)
+    image = fake.create_publisher(Image, '/odin1/image/undistorted', qos_profile_sensor_data)
+    info = fake.create_publisher(CameraInfo, '/odin1/camera_info', qos_profile_sensor_data)
+    broadcaster = TransformBroadcaster(fake)
+    buffer = Buffer(node=fake)
+    listener = TransformListener(buffer, fake)
+    live = dict(active=True, camera_tf=False, count=0)
 
-
-@pytest.mark.parametrize('send_vision',[True,False])
-def test_odin_late_calibration_and_sensor_pipeline(tmp_path,send_vision):
-    config = yaml.safe_load((Path(get_package_share_directory('flyco_real')) / 'config/odin.yaml').read_text())
-    config = {k:v for k,v in config.items() if isinstance(v,dict) and 'ros__parameters' in v}
-    config['odin_adapter']['ros__parameters']['body_to_imu_translation'] = [.2,0.,0.]
-    config['sensor_bridge']['ros__parameters']['publish_external_vision'] = send_vision
-    profile = tmp_path / 'parameters.yaml'
-    profile.write_text(yaml.safe_dump(config))
-    rclpy.init(args=['--ros-args','--params-file',str(profile)])
-    fake = Node('odin_transport_probe')
-    executor = SingleThreadedExecutor()
-    executor.add_node(fake)
-    retained = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)
-    calibration_pub = fake.create_publisher(Odometry, '/odin1/wiwc', retained)
-    imu_lidar = transform_matrix([.05,0.,0.],[0.,0.,0.,1.])
-    imu_camera = transform_matrix([.1,0.,0.],[-.5,.5,-.5,.5])
-    wi = Odometry()
-    wi.pose.covariance = (np.linalg.inv(imu_camera) @ imu_lidar).flatten().tolist() + [0.]*20
-    wi.twist.covariance = imu_lidar.flatten().tolist() + [0.]*20
-    calibration_pub.publish(wi)  # Sent BEFORE subscriber creation.
-    adapter, bridge = OdinAdapter(), SensorBridge()
-    executor.add_node(adapter); executor.add_node(bridge)
-    buffer=Buffer(node=fake); listener=TransformListener(buffer,fake)
-    outputs, clouds, images, infos, visions = [], [], [], [], []
-    fake.create_subscription(Odometry,'/flyco/odom',outputs.append,10)
-    fake.create_subscription(PointCloud2,'/flyco/lidar/world',clouds.append,10)
-    fake.create_subscription(Image,'/flyco/camera/rgb',images.append,10)
-    fake.create_subscription(CameraInfo,'/flyco/camera/info',infos.append,10)
-    fake.create_subscription(VehicleOdometry,'/fmu/in/vehicle_visual_odometry',visions.append,10)
-    odom_pub=fake.create_publisher(Odometry,'/odin1/odometry_highfreq',qos_profile_sensor_data)
-    cloud_pub=fake.create_publisher(PointCloud2,'/odin1/cloud_slam',qos_profile_sensor_data)
-    image_pub=fake.create_publisher(Image,'/odin1/image/undistorted',qos_profile_sensor_data)
-    info_pub=fake.create_publisher(CameraInfo,'/odin1/camera_info',qos_profile_sensor_data)
-    live={'active':True, 'inputs':0}
     def publish():
         if not live['active']: return
-        stamp=fake.get_clock().now().to_msg()
-        msg=Odometry(header=Header(stamp=stamp,frame_id='odom'),child_frame_id='imu')
-        msg.pose.pose.position.x, msg.pose.pose.position.z, msg.pose.pose.orientation.w = 1.2, 1., 1.
-        odom_pub.publish(msg); live['inputs']+=1
-        if live['inputs'] % 10: return
-        cloud_pub.publish(point_cloud2.create_cloud_xyz32(msg.header,[[3.3,0.,1.]]))
-        header=Header(stamp=stamp,frame_id='odin_camera_optical_frame')
-        info=CameraInfo(header=header,width=32,height=24,distortion_model='plumb_bob',d=[0.]*5)
-        info.k=[20.,0.,16.,0.,20.,12.,0.,0.,1.]
-        info.r=np.eye(3).flatten().tolist()
-        info.p=[20.,0.,16.,0.,0.,20.,12.,0.,0.,0.,1.,0.]
-        info_pub.publish(info)
-        image_pub.publish(Image(header=header,width=32,height=24,encoding='bgr8',step=96,data=bytes(32*24*3)))
-    timer=fake.create_timer(.005,publish)
-    def spin(seconds):
-        until=time.monotonic()+seconds
-        while time.monotonic()<until: executor.spin_once(timeout_sec=.005)
+        stamp = fake.get_clock().now().to_msg()
+        msg = Odometry(header=Header(stamp=stamp, frame_id='odom'), child_frame_id='imu')
+        msg.pose.pose.position.x, msg.pose.pose.position.z = 1.2, 1.
+        msg.pose.pose.orientation.w = 1.
+        # Odin's compact high-frequency packets have no covariance or velocity.
+        odom.publish(msg)
+        live['count'] += 1
+        if live['count'] % 10: return
+        if live['camera_tf']:
+            imu = TransformStamped(header=msg.header, child_frame_id='imu')
+            imu.transform.translation.x, imu.transform.translation.z, imu.transform.rotation.w = 1.2, 1., 1.
+            lidar = TransformStamped(header=Header(stamp=stamp, frame_id='imu'), child_frame_id='lidar')
+            lidar.transform.translation.x, lidar.transform.rotation.w = .05, 1.
+            camera = TransformStamped(header=msg.header, child_frame_id='camera_0')
+            camera.transform.translation.x, camera.transform.translation.z = 1.3, 1.
+            camera.transform.rotation.x, camera.transform.rotation.y = -.5, .5
+            camera.transform.rotation.z, camera.transform.rotation.w = -.5, .5
+            broadcaster.sendTransform([imu, lidar, camera])
+        cloud.publish(point_cloud2.create_cloud_xyz32(msg.header, [[3.3, 0., 1.]]))
+        header = Header(stamp=stamp, frame_id='odin_camera_optical_frame')
+        calibration = CameraInfo(header=header, width=32, height=24, distortion_model='plumb_bob', d=[0.]*5)
+        calibration.k = [20., 0., 16., 0., 20., 12., 0., 0., 1.]
+        calibration.r = np.eye(3).flatten().tolist()
+        calibration.p = [20., 0., 16., 0., 0., 20., 12., 0., 0., 0., 1., 0.]
+        info.publish(calibration)
+        image.publish(Image(header=header, width=32, height=24, encoding='bgr8', step=96, data=bytes(32*24*3)))
+
+    fake.create_timer(.01, publish)
+    log = log_path.open('w')
+    process = subprocess.Popen(['ros2', 'launch', 'flyco_real', 'hardware.launch.py',
+        'role:=sensors', 'start_driver:=false', 'config:='+str(config),
+        'runtime_root:='+str(tmp_path/'runtime')], cwd='/tmp', stdout=log, stderr=subprocess.STDOUT,
+        start_new_session=True)
+
+    def spin(seconds, until=lambda: False):
+        deadline = time.monotonic()+seconds
+        while time.monotonic() < deadline and not until():
+            assert process.poll() is None, log_path.read_text()
+            rclpy.spin_once(fake, timeout_sec=.01)
+
     try:
-        spin(2.)
-        assert adapter.calibration is not None, 'Retained WIWC must reach a late subscriber'
-        assert outputs and clouds and images and infos
-        assert bool(visions) == send_vision
-        assert outputs[-1].pose.pose.position.x == pytest.approx(1.)
-        if send_vision: assert np.allclose(visions[-1].position,[0.,1.,-1.])
-        assert len(outputs) < live['inputs']*.6
-        stamps=[m.header.stamp.sec+m.header.stamp.nanosec*1e-9 for m in outputs]
-        assert np.min(np.diff(stamps)) >= .0199
-        camera=tf_matrix(buffer.lookup_transform('world','odin_camera_optical_frame',Time()).transform)
-        assert camera[0,3] == pytest.approx(1.3)
-        optical=np.linalg.inv(camera) @ [3.3,0.,1.,1.]
-        assert np.allclose(optical[:3],[0.,0.,2.])
-        assert infos[-1].k[0] == 20. and not any(infos[-1].d)
-        assert images[-1].header.frame_id == 'odin_camera_optical_frame'
-        assert np.allclose(point_cloud2.read_points(clouds[-1],field_names=('x','y','z')).tolist(),[[3.3,0.,1.]])
-        # Stale device-boot timestamps cannot become fresh external-vision data.
-        live['active']=False; spin(.1); before=len(outputs)
-        stale=copy.deepcopy(outputs[-1]); stale.header.frame_id='odom'; stale.child_frame_id='imu'
-        stale.header.stamp.sec=0; stale.header.stamp.nanosec=0
-        odom_pub.publish(stale); spin(.1)
-        assert len(outputs)==before
-        changed=copy.deepcopy(wi)
-        changed.pose.covariance[3] += .1
-        with pytest.raises(RuntimeError,match='calibration changed'):
-            adapter.on_extrinsics(changed)
+        spin(10., lambda: len(outputs) >= 8 and len(visions) >= 8)
+        assert outputs and visions, log_path.read_text()
+        assert not live['camera_tf']  # PX4 must work before native camera TF is ready.
+        live['camera_tf'] = True
+        spin(5., lambda: bool(clouds and images and infos and feedback))
+        assert clouds and images and infos and feedback, log_path.read_text()
+        assert outputs[-1].header.frame_id == 'world'
+        assert outputs[-1].child_frame_id == 'base_link'
+        assert outputs[-1].pose.pose.position.x == 1.2
+        np.testing.assert_allclose(visions[-1].position, [0., 1.2, -1.], atol=1.e-6)
+        np.testing.assert_allclose(np.abs(visions[-1].q), [math.sqrt(.5), 0., 0., math.sqrt(.5)], atol=1.e-6)
+        assert visions[-1].pose_frame == VehicleOdometry.POSE_FRAME_FRD
+        assert visions[-1].velocity_frame == VehicleOdometry.VELOCITY_FRAME_UNKNOWN
+        assert np.isnan(visions[-1].velocity).all()
+        np.testing.assert_allclose(visions[-1].position_variance, [.04, .04, .09])
+        stamps = {Time.from_msg(m.header.stamp).nanoseconds//1000 for m in outputs}
+        assert any(m.timestamp_sample in stamps for m in visions)
+        assert images[-1].header.frame_id == infos[-1].header.frame_id == 'camera_0'
+        assert tf_matrix(buffer.lookup_transform('world', 'base_link', Time()).transform)[0, 3] == 1.2
+        for topic in ('/flyco/odom', '/fmu/in/vehicle_visual_odometry'):
+            assert {entry.node_name for entry in fake.get_publishers_info_by_topic(topic)} == {'generic_odometry_node'}
+        live['active'] = False
+        spin(.2)
+        before = (len(outputs), len(visions))
+        invalid = copy.deepcopy(outputs[-1])
+        invalid.header.frame_id, invalid.child_frame_id = 'odom', 'imu'
+        invalid.header.stamp.sec = invalid.header.stamp.nanosec = 0
+        odom.publish(invalid)
+        spin(.15)
+        invalid.header.stamp = fake.get_clock().now().to_msg()
+        invalid.pose.pose.orientation.w = 0.
+        odom.publish(invalid)
+        spin(.15)
+        assert (len(outputs), len(visions)) == before
     finally:
-        for node in (bridge,adapter,fake): executor.remove_node(node); node.destroy_node()
-        executor.shutdown(); rclpy.shutdown()
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGINT)
+            try: process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+        log.close()
+        fake.destroy_node()
+        rclpy.shutdown()

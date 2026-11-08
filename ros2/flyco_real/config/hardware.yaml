@@ -1,15 +1,12 @@
-# PX4 v1.16 native DDS. Measure vehicle mounting calibration before use.
-sensor_bridge:
+# PX4 1.17 custom native DDS. Measure vehicle mounting calibration before use.
+perception_bridge:
   ros__parameters:
     use_sim_time: false
-    odom_topic: /Odometry
     cloud_topic: /cloud_registered
     image_topic: /camera/color/image_rect
     camera_info_topic: /camera/color/camera_info
     image_is_rectified: true
     lio_parent_frame: camera_init
-    lio_child_frame: ''
-    lio_twist_frame: child
     world_frame: world
     body_frame: base_link
     camera_optical_frame: camera_optical_frame
@@ -22,15 +19,6 @@ sensor_bridge:
     - 0.0
     - 0.0
     - 1.0
-    publish_external_vision: true
-    external_vision_frame: FRD  # Arbitrary SLAM heading; NED requires North alignment.
-    pose_variances:
-    - 0.04
-    - 0.04
-    - 0.09
-    - 0.01
-    - 0.01
-    - 0.02
     max_sensor_age: 0.4
     cloud_voxel_size: 0.15
     px4_topic_prefix: /fmu
@@ -94,3 +82,8 @@ mesh_predict_node:
 prompt_ui:
   ros__parameters:
     initial_text_prompt: 一个煤堆
+
+generic_odometry_node:
+  ros__parameters:
+    odometry_topic: /Odometry
+    input_frame: camera_init

@@ -9,6 +9,9 @@ build:
     - third_party/flyco_ros2
     - third_party/drivers/odin_ros_driver
     - third_party/px4_msgs
+    - third_party/px4_ros2_ctrl/external/px4-ros2-interface-lib/px4_ros2_cpp
+    - third_party/px4_ros2_ctrl/navigation/ros2_px4_odometry
+    - third_party/px4_ros2_ctrl/modes/flyco_mode
   build-base: build
   install-base: install
   symlink-install: true

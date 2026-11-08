@@ -94,7 +94,7 @@ class FlyCoMission(Node):
                 self.activation_deadline = None
                 self.report('blocked', 'Activation cancelled or timed out; return to Position to try again')
             elif (self.odom_ok() and self.control_rx is not None and now-self.control_rx <= 2. and
-                    all(self.control.get(k) for k in ('enabled','armed','odom_ok','px4_ok','ground_ok','mode_executor_active')) and
+                    all(self.control.get(k) for k in ('enabled','armed','odom_ok','px4_ok','mode_executor_active')) and
                     self.control.get('landed') is True and self.takeoff.service_is_ready()):
                 self.target_z = self.odom.pose.pose.position.z+float(self.control.get('takeoff_height', 2.))
                 self.activation_deadline = None

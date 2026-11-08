@@ -70,8 +70,8 @@ def test_control_task_does_not_hide_rejection(terminal):
 
 def test_terminal_mode_selection_and_normal_arm_confirm_actual_state(terminal):
     server, client = terminal
-    state = dict(registered_mode_id=26, mode_executor_id=2, enabled=True, px4_ok=True,
-                 odom_ok=True, ground_ok=True, armed=False, mode='POSCTL')
+    state = dict(registered_mode_id=26, mode_executor_id=2, enabled=False, px4_ok=False,
+                 odom_ok=False, ground_ok=False, armed=False, mode='POSCTL')
     received = []
     status = server.create_publisher(String, '/flyco/control/status',
         QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))

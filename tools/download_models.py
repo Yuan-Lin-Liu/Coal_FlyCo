@@ -23,8 +23,15 @@ def main():
     parser.add_argument('--directory', type=Path, default=ROOT/'.local/flyco/models')
     parser.add_argument('--check', action='store_true')
     parser.add_argument('--huggingface', action='store_true')
+    parser.add_argument('--profile', choices=('all', 'ground'), default='all',
+                        help='ground downloads only mesh prediction resources')
     args = parser.parse_args()
     manifest = json.loads((ROOT/'config/models.json').read_text())
+    if args.profile == 'ground':
+        manifest['files'] = [entry for entry in manifest['files']
+                             if entry['path'].startswith(('mesh/', 'torch/'))]
+        manifest['huggingface'] = [entry for entry in manifest['huggingface']
+                                   if entry['repo'] in ('facebook/dinov2-base', 'google/siglip-base-patch16-224')]
     target = args.directory.resolve()
     missing = []
     if not args.huggingface:
@@ -59,7 +66,10 @@ def main():
                     missing.append(entry['repo']+' cache reference')
             else:
                 from huggingface_hub import snapshot_download
-                snapshot_download(entry['repo'], revision=entry['revision'], cache_dir=hub)
+                options = {}
+                if args.profile == 'ground':
+                    options['allow_patterns'] = ['*.json', '*.txt', '*.model', '*.safetensors']
+                snapshot_download(entry['repo'], revision=entry['revision'], cache_dir=hub, **options)
                 reference.parent.mkdir(parents=True, exist_ok=True)
                 reference.write_text(entry['revision'])
                 print('Prepared:', entry['repo'], entry['revision'], flush=True)

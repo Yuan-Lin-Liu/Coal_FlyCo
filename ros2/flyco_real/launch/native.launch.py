@@ -5,7 +5,8 @@ import yaml
 from pathlib import Path
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, EmitEvent
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, EmitEvent, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
@@ -42,12 +43,18 @@ def build(context):
         remaps = list(spec.get('remappings', {}).items())
         return node('flyco_ros2', spec['executable'], name, remaps, extra)
     if role == 'onboard':
-        if LaunchConfiguration('start_sensor_bridge').perform(context).lower() == 'true':
-            node('flyco_real', 'sensor_bridge.py', 'sensor_bridge')
+        if LaunchConfiguration('start_sensors').perform(context).lower() == 'true':
+            odometry = Node(package='ros2_px4_odometry', executable='odom_to_px4_node', name='generic_odometry_node',
+                parameters=[LaunchConfiguration('odometry_config').perform(context), str(config)], output='screen')
+            actions.append(odometry)
+            critical.append(odometry)
+            node('flyco_real', 'perception_bridge.py', 'perception_bridge')
             fov = node('flyco_real', 'camera_fov.py', 'camera_fov')
             critical.remove(fov)
         if LaunchConfiguration('start_mode').perform(context).lower() == 'true':
-            node('flyco_real', 'px4_bridge.py', 'px4_bridge')
+            actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(str(
+                Path(get_package_share_directory('flyco_real')) / 'launch/mode.launch.py')),
+                launch_arguments={'config': hardware}.items()))
         flyco('flyco_planner')
         flyco('traj_server')
         flyco('sam_tracking_node')
@@ -73,7 +80,9 @@ def generate_launch_description():
         DeclareLaunchArgument('config', default_value=str(share / 'config/hardware.yaml')),
         DeclareLaunchArgument('runtime_root', default_value=str(Path.home() / '.ros/coal-flyco')),
         DeclareLaunchArgument('ui', default_value='false'),
-        DeclareLaunchArgument('start_sensor_bridge', default_value='true'),
+        DeclareLaunchArgument('start_sensors', default_value='true'),
+        DeclareLaunchArgument('odometry_config', default_value=str(
+            Path(get_package_share_directory('ros2_px4_odometry')) / 'config/odin_config.yaml')),
         DeclareLaunchArgument('start_mode', default_value='true'),
         DeclareLaunchArgument('python_executable', default_value=''),
         OpaqueFunction(function=build),

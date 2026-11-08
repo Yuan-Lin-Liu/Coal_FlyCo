@@ -1,0 +1,19 @@
+/**:
+  ros__parameters:
+    message_type: "odometry"
+    odometry_topic: "/odin1/odometry_highfreq"
+    input_frame: "odom"
+    extrinsic_translation: [0.0, 0.0, 0.0]
+    extrinsic_rotation_matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    # Odin's SLAM heading is arbitrary; do not label it true North.
+    pose_frame: "FRD"
+    topic_namespace_prefix: ""
+    # The compact high-frequency SDK format has no covariance or velocity.
+    use_pose_covariance: false
+    pose_variances: [0.04, 0.04, 0.09, 0.01, 0.01, 0.02]
+    publish_velocity: false
+    publish_rate: 50.0
+    # Feed planning independently of the image/point-cloud Python process.
+    odometry_output_topic: "/flyco/odom"
+    output_frame: "world"
+    output_child_frame: "base_link"

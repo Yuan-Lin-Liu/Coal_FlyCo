@@ -110,6 +110,10 @@ def generate_launch_description():
         omitted.add('px4ctrl')  # PX4 owns all position/attitude/rate control loops
     if sensor_config.get('flight_controller') == 'px4-native' and role != 'algorithms':
         if os.environ.get('FLYCO_ISAAC_EXTERNAL_NATIVE_MODE') != '1':
+            native_mode = Node(package='flyco_mode', executable='flyco_mode', name='flyco_mode',
+                parameters=[{'use_sim_time': True}], output='screen')
+            actions.append(native_mode)
+            critical.append(native_mode)
             mode = Node(package='flyco_real', executable='px4_bridge.py',
                 parameters=[{'simulation': True, 'use_sim_time': True, 'odom_topic': '/isaac/odom',
                              'px4_local_timeout': 1.,

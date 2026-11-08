@@ -48,7 +48,7 @@ def build(context):
         share = Path(get_package_share_directory('flyco_real'))
         actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share/'launch/native.launch.py')),
             launch_arguments={'role': 'onboard', 'config': arg('config'), 'start_mode': 'false',
-                              'start_sensor_bridge': 'false'}.items()))
+                              'start_sensors': 'false'}.items()))
     mission = Node(package='flyco_real', executable='mission.py', name='flyco_mission',
                    parameters=[mission_params], additional_env=node_env, output='screen')
     actions.append(mission)

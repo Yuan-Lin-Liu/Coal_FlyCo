@@ -14,7 +14,7 @@ from std_srvs.srv import SetBool, Trigger
 from .control import fresh, validate_command
 from .geometry import pose_matrix, world_alignment
 from .px4_dds import ENU_TO_NED, local_pose_enu, topic, yaw_ned
-from .mode_registration import FlyCoMode
+from .mode_state import FlyCoModeState
 
 
 def stamp_seconds(stamp):
@@ -33,6 +33,7 @@ class PX4Bridge(Node):
             'odom_topic': '/flyco/odom', 'command_topic': '/planning/pos_cmd',
             'px4_topic_prefix': '/fmu', 'world_frame': 'world', 'rate': 50.,
             'odom_timeout': .3, 'state_timeout': 2., 'command_timeout': .3,
+            'check_odom_freshness': True,
             'px4_local_timeout': .3,
             'warmup_seconds': 1.2, 'max_speed': 1.5, 'max_acceleration': 3.,
             'max_yaw_rate': 1., 'max_position_error': 2.,
@@ -50,8 +51,10 @@ class PX4Bridge(Node):
             self.settings[key] = self.get_parameter(key).value
         if self.settings['enable_control']:
             raise ValueError('Use task.py enable; startup cannot engage control')
-        if self.settings['rate'] < 10. or self.settings['warmup_seconds'] < 1.:
-            raise ValueError('FlyCo requires at least 10 Hz output and one second of warmup')
+        if not self.settings['check_odom_freshness']:
+            self.get_logger().warning('Ground arming test: odometry freshness check disabled; FlyCo takeoff and tracking disabled')
+        if not np.isfinite(self.settings['rate']) or self.settings['rate'] <= 0.:
+            raise ValueError('rate must be finite and positive')
         if (len(self.settings['bounds_min']) != 3 or len(self.settings['bounds_max']) != 3 or
                 np.any(np.array(self.settings['bounds_min']) >= self.settings['bounds_max'])):
             raise ValueError('Invalid flight volume')
@@ -79,9 +82,7 @@ class PX4Bridge(Node):
         prefix = self.settings['px4_topic_prefix']
         self.state_topic = topic(prefix, 'out', 'vehicle_status', VehicleStatus)
         self.local_topic = topic(prefix, 'out', 'vehicle_local_position', VehicleLocalPosition)
-        self.output = self.create_publisher(TrajectorySetpoint, topic(prefix, 'in', 'trajectory_setpoint', TrajectorySetpoint), 1)
-        self.flight_mode = FlyCoMode(self, prefix, lambda: self.enabled and self.ready() and
-            fresh(self.ground_rx, time.monotonic(), self.settings['ground_link_timeout']))
+        self.flight_mode = FlyCoModeState(self)
         self.vehicle_command = self.create_publisher(VehicleCommand, topic(prefix, 'in', 'vehicle_command', VehicleCommand), 1)
         self.executor_command = self.create_publisher(VehicleCommand,
             topic(prefix, 'in', 'vehicle_command_mode_executor', VehicleCommand), 1)
@@ -204,9 +205,13 @@ class PX4Bridge(Node):
     def on_ground(self, msg):
         self.ground_rx = time.monotonic()
 
-    def odom_ok(self):
+    def odom_fresh(self):
         return bool(self.odom and fresh(self.odom_rx, time.monotonic(), self.settings['odom_timeout']) and
                     fresh(stamp_seconds(self.odom.header.stamp), self.now(), self.settings['odom_timeout']))
+
+    def odom_ok(self):
+        # Even the explicit bench override needs a valid pose for world alignment.
+        return self.odom is not None and (not self.settings['check_odom_freshness'] or self.odom_fresh())
 
     def px4_issue(self):
         if not self.state or not fresh(self.state_rx, time.monotonic(), self.settings['state_timeout']):
@@ -264,7 +269,7 @@ class PX4Bridge(Node):
         self.enabled_at = time.monotonic()
         self.command = None
         self.last_control_fault = None
-        self.latch_hold('ready; normally arm on the ground in Position, then select FlyCo')
+        self.latch_hold('planner coordinates ready; mode registration and arming are handled by C++/PX4')
         response.success, response.message = True, self.reason
         return response
 
@@ -280,6 +285,9 @@ class PX4Bridge(Node):
         self.executor_command.publish(msg)
 
     def takeoff(self, request, response):
+        if not self.settings['check_odom_freshness']:
+            response.success, response.message = False, 'Ground arming test: enable odometry freshness checks before takeoff'
+            return response
         if not (self.enabled and self.ready() and self.armed_flyco() and
                 self.flight_mode.executor_id is not None and
                 self.state.executor_in_charge == self.flight_mode.executor_id):
@@ -314,12 +322,11 @@ class PX4Bridge(Node):
         self.executor_request(VehicleCommand.VEHICLE_CMD_SET_NAV_STATE, param1=float(self.flight_mode.mode_id))
 
     def resume(self, request, response):
-        if not (self.enabled and self.ready() and self.armed_flyco() and
-                time.monotonic() - self.enabled_at >= self.settings['warmup_seconds']):
-            response.success, response.message = False, 'Enable and warm up; select FlyCo and arm explicitly first'
+        if not self.settings['check_odom_freshness']:
+            response.success, response.message = False, 'Ground arming test: enable odometry freshness checks before tracking'
             return response
-        if not fresh(self.ground_rx, time.monotonic(), self.settings['ground_link_timeout']):
-            response.success, response.message = False, 'Ground heartbeat is missing'
+        if not (self.enabled and self.ready() and self.armed_flyco()):
+            response.success, response.message = False, 'Need planner coordinates and an armed FlyCo mode'
             return response
         self.tracking, self.reason = True, 'tracking'
         self.command = self.cmd_rx = None
@@ -370,20 +377,9 @@ class PX4Bridge(Node):
         return msg
 
     def tick(self):
-        self.flight_mode.tick()
         if self.auto_enable_pending and not self.enabled:
-            can_enable = (self.flight_mode.mode_id is not None and self.ready() and
-                fresh(self.ground_rx, time.monotonic(), self.settings['ground_link_timeout']) and
-                self.state.nav_state != self.flight_mode.mode_id and
-                (self.state.arming_state != VehicleStatus.ARMING_STATE_ARMED or
-                 self.state.nav_state == VehicleStatus.NAVIGATION_STATE_POSCTL))
-            if not can_enable:
-                self.auto_enable_ready_since = None
-            else:
-                if self.auto_enable_ready_since is None:
-                    self.auto_enable_ready_since = time.monotonic()
-                if time.monotonic()-self.auto_enable_ready_since >= self.settings['warmup_seconds']:
-                    self.enable(SetBool.Request(data=True), SetBool.Response())
+            if self.flight_mode.mode_id is not None and self.ready():
+                self.enable(SetBool.Request(data=True), SetBool.Response())
         taking_off = self.takeoff_phase in ('requested', 'climbing', 'returning')
         if taking_off:
             owns = self.state and self.state.executor_in_charge == self.flight_mode.executor_id
@@ -410,7 +406,7 @@ class PX4Bridge(Node):
         if self.enabled and not self.ready():
             cause = self.px4_issue() or 'FlyCo odometry lost or stale'
             now = time.monotonic()
-            self.last_control_fault = dict(reason=cause, ros_time=self.now(), action='PX4 failsafe',
+            self.last_control_fault = dict(reason=cause, ros_time=self.now(), action='native FlyCo holds position',
                 odom_receive_age=now-self.odom_rx if self.odom_rx is not None else None,
                 px4_local_receive_age=now-self.local_rx if self.local_rx is not None else None,
                 px4_local_timeout=self.settings['px4_local_timeout'],
@@ -427,7 +423,8 @@ class PX4Bridge(Node):
                     self.takeoff_phase = 'failed'
                     taking_off = False
             self.enabled = False
-            self.latch_hold('control stopped: '+cause)
+            self.auto_enable_pending = bool(self.settings['auto_enable'] and not self.auto_enable_inhibited)
+            self.latch_hold('planner targets stopped: '+cause)
         if self.enabled and self.seen_flyco and not self.armed_flyco() and not taking_off:
             self.enabled = False
             self.latch_hold('PX4 left armed FlyCo; enable again after inspection')
@@ -441,8 +438,6 @@ class PX4Bridge(Node):
         target = self.make_hold()
         if self.tracking:
             now = time.monotonic()
-            if not fresh(self.ground_rx, now, self.settings['ground_link_timeout']):
-                self.latch_hold('ground link lost; resume after restoration')
             if not (self.command and fresh(self.cmd_rx, now, self.settings['command_timeout']) and
                     fresh(stamp_seconds(self.command.header.stamp), self.now(), self.settings['command_timeout'])):
                 timeout = self.settings['command_timeout'] if self.received_active_command else self.settings['first_command_timeout']
@@ -478,10 +473,7 @@ class PX4Bridge(Node):
                     target.yawspeed = -float(cmd.yaw_dot)
         if not self.tracking: target = self.make_hold()
         target.timestamp = self.timestamp_us()
-        # Registered external modes supply the requirements through
-        # config_control_setpoints; they never emit OffboardControlMode.
-        if self.flight_mode.mode_id is not None and self.state and self.state.nav_state == self.flight_mode.mode_id:
-            self.output.publish(target)
+        # The C++ ModeBase node owns PX4 setpoint publication and activation.
         self.preview.publish(target)
         self.publish_status()
 
@@ -503,7 +495,11 @@ class PX4Bridge(Node):
             'mode': ('FlyCo' if self.flight_mode.mode_id is not None and self.state.nav_state == self.flight_mode.mode_id
                      else names.get(self.state.nav_state,'NAV_%d' % self.state.nav_state)) if self.state else 'unknown',
             'registered_mode_id': self.flight_mode.mode_id, 'registration_issue': self.flight_mode.error,
+            'mode_registered': self.flight_mode.mode_id is not None,
+            'arming_checks': 'PX4 mode requirements',
             'armed': bool(self.state and self.state.arming_state == VehicleStatus.ARMING_STATE_ARMED),
+            'check_odom_freshness': self.settings['check_odom_freshness'],
+            'odom_fresh': self.odom_fresh(),
             'odom_ok':self.odom_ok(),'px4_ok':not bool(issue),
             'ground_ok':fresh(self.ground_rx,time.monotonic(),self.settings['ground_link_timeout']),
             'px4_issue':issue,'reason':self.reason,'land_result':self.land_result})
@@ -511,11 +507,6 @@ class PX4Bridge(Node):
             self.status.publish(String(data=value))
             self.get_logger().info(value)
             self._last_status = value
-
-    def destroy_node(self):
-        self.flight_mode.close()
-        return super().destroy_node()
-
 
 def main():
     from flyco_common.execution import main_for

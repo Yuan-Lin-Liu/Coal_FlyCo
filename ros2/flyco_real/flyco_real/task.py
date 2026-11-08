@@ -75,9 +75,8 @@ def mode_task(node, action):
     if action == 'status':
         print(json.dumps(status, ensure_ascii=False, indent=2))
         return
-    if (status.get('registered_mode_id') is None or not status.get('enabled') or
-            not all(status.get(key) for key in ('px4_ok', 'odom_ok', 'ground_ok'))):
-        raise RuntimeError('FlyCo is not ready; enable control and inspect task.py status')
+    if status.get('registered_mode_id') is None:
+        raise RuntimeError('FlyCo mode is not registered; start mode.launch.py first')
     if action == 'arm' and status.get('mode') != 'FlyCo':
         raise RuntimeError('Select FlyCo before arming: task.py select-mode')
     if action == 'arm' and status.get('armed'):

@@ -2,8 +2,10 @@
 
 分支 `dev-real`，ROS2 Humble。
 
+从两台新设备开始准备时，完整依赖、架构说明和按终端排列的命令见 [真机双机部署指令](dual_host_deployment.md)；其中单独列出了尚待 Orin/固件信息确认的移植条件。
+
 论文 §7.1.1 的分工：**地面电脑运行表面预测；Orin 运行定位、感知、规划和轨迹执行**。
-原文使用 Orin NX、Mid360 和云台相机；本工程以 Odin 设备内 SLAM 替换定位链，固定相机使用实测外参。
+原文使用 Orin NX、Mid360 和云台相机；本工程以 Odin 设备内 SLAM 替换定位链，直接复用原驱动的相机 TF，Odin IMU 与机体按零安装偏移处理。
 
 | 设备 | 模块 |
 |---|---|
@@ -48,14 +50,23 @@ source install/setup.bash
 
 ROS2 域、网络范围和 RMW 实现暂不指定，真机部署时根据地面电脑、Orin 和现有 PX4 DDS 配置统一确认。若现有通信已正常，直接复用；需要调整时再确定 `ROS_DOMAIN_ID`、`ROS_LOCALHOST_ONLY`、`RMW_IMPLEMENTATION` 及飞控的 `UXRCE_DDS_DOM_ID`。部署时还需保证两端时间同步和 DDS 网络互通。仿真继续按 [仿真说明](px4_qgc.md) 使用域 64。
 
-**Odin 自带的标定由驱动处理**：驱动连接设备时读取该设备的 `calib.yaml`，根据标定生成去畸变图像。本工程已默认启用 `/odin1/image/undistorted`，并由驱动发布匹配的 `/odin1/camera_info`，两者使用 `odin_camera_optical_frame`；设备内部的 IMU、雷达、相机外参通过 `/odin1/wiwc` 交给适配节点。正常使用本工程提供的驱动和配置，无需手工填写相机内参、重复去畸变或重新标定设备内部外参。驱动原说明见 [标定文件](../third_party/drivers/odin_ros_driver/README.md#41-file-structure) 和 [话题说明](../third_party/drivers/odin_ros_driver/README.md#43-ros-topics)；具体话题名以本工程驱动实现为准。
+**Odin 自带的标定由原驱动处理**：驱动读取设备的 `calib.yaml`，输出 `/odin1/image/undistorted`、匹配的 `/odin1/camera_info`，以及原生 `odom → imu`、`imu → lidar`、`odom → camera_0` TF。无需额外外参适配节点或 `/odin1/wiwc` 订阅。
 
-`odin_adapter.ros__parameters.body_to_imu_*` 是 **Odin 在飞机上的安装关系**，设备出厂标定无法知道它：
+本工程默认 IMU 与机体原点、轴向重合，直接转发机体位姿，不发布安装外参 TF、不做安装偏移补偿。保留 `world → odom` 世界系连接、`world → base_link` 机体位姿和原驱动 TF。桥接后的 RGB、CameraInfo 使用原驱动光学 TF 名 `camera_0`（原始图像头为 `odin_camera_optical_frame`），仅统一同一光学坐标系的名称，保留内参和图像数据。ROS ENU/FLU 到 PX4 坐标约定的转换继续保留。
 
-- `body_to_imu_translation`：Odin IMU 原点在飞机 `base_link`（前、左、上）坐标系中的位置，单位米。
-- `body_to_imu_quaternion`：将 Odin IMU 坐标中的向量旋转到飞机机体系的旋转，顺序 `[x, y, z, w]`。
+已有车辆配置中的旧 `odin_adapter` 字段会被忽略，Odin 启动入口自动启用原驱动 TF。图像、CameraInfo 和光学 TF 仍应来自同一设备及匹配驱动版本。
 
-这两项现在先保留模板，等实际机架、安装朝向和原有定位链确认后再处理。如果此前已通过 TF、机体原点定义或 PX4 外部定位参数处理过安装关系，应先核对并复用已有结果，避免重复补偿。模板中的零平移和单位四元数表示两坐标系完全重合，只有实际采用该定义时才适用。图像、CameraInfo 和光学坐标的一致性也在设备接入时确认，正常情况下由上述驱动自动保证；更换驱动版本、图像分辨率或另接相机后才需要重新核对相应配置。
+若通过 SCP/压缩包覆盖旧工程，覆盖操作不会删除旧文件。在 Orin 工程根目录清理已停用的适配节点后，仅重编译真机入口包即可；无需清空其他编译产物或车辆配置：
+
+```bash
+rm -f ros2/flyco_real/flyco_real/odin_adapter.py \
+  ros2/flyco_real/scripts/odin_adapter.py \
+  install/flyco_real/lib/flyco_real/odin_adapter.py \
+  install/flyco_real/local/lib/python3.10/dist-packages/flyco_real/odin_adapter.py
+source /opt/ros/humble/setup.bash
+colcon build --packages-select flyco_real
+source install/setup.bash
+```
 
 其余 `config/vehicle.odin.local.yaml` 配置在真机部署时确认：
 
@@ -70,7 +81,7 @@ PX4 外部视觉融合参数按 [官方外部定位说明](https://docs.px4.io/v
 **Orin 终端 A：飞控 DDS 链路**（已有 Agent 时复用，不重复启动）：
 
 ```bash
-ros2 launch flyco_real agent.launch.py transport:=serial device:=/dev/ttyACM0 baudrate:=921600
+MicroXRCEAgent udp4 -p 8888
 ```
 
 **Orin 终端 B：Odin 独立定位**：
@@ -79,7 +90,7 @@ ros2 launch flyco_real agent.launch.py transport:=serial device:=/dev/ttyACM0 ba
 ros2 launch flyco_real odin.launch.py config:="$PWD/config/vehicle.odin.local.yaml"
 ```
 
-此入口运行 Odin 驱动、安装标定适配和传感器桥，可独立使用。数据转换至 `/flyco/odom`、`/flyco/lidar/world`、`/flyco/camera/rgb`，并发送 PX4 外部视觉位姿。
+此入口运行 Odin 原驱动、传感器桥和相机视场节点，可独立使用。数据转换至 `/flyco/odom`、`/flyco/lidar/world`、`/flyco/camera/rgb`，并发送 PX4 外部视觉位姿。位姿转发不依赖相机 TF 是否已经就绪。
 
 **Orin 终端 C：本机语义推理**：
 
@@ -146,6 +157,12 @@ ros2 run rviz2 rviz2 -d "$PWD/ros2/flyco_real/config/flyco_real.rviz"
 ```
 
 仅需优先检查三个话题：`/flyco/odom`（定位）、`/flyco/control/status`（链路/模式/控制状态）、`/prediction/predicted_mesh`（地面预测）。点云为 `/flyco/lidar/world`，图像为 `/flyco/camera/rgb`。无显示时先查 ROS 域、网络、时间、TF，再看对应终端首个错误。
+
+FlyCo 使用与 PX4 Position 相同的本地位置要求：`mode_req_local_position=false`、`mode_req_local_position_relaxed=true`。PX4 根据 `local_position_invalid_relaxed` 判断该项条件，放宽水平位置误差的有限阈值，仍检查位置有效性与数据新鲜度。角速度、姿态、本地高度以及 FlyCo 自身的定位超时和地面心跳检查继续生效。这个改动只统一位置检查条件，不能消除定位数据中断；编译后重启模式节点即可生效，无需刷写飞控。
+
+工程内 `third_party/px4_msgs` 已直接同步用户提供的 PX4 1.17 定制源码定义；来源提交、文件校验和见该包 `SOURCE.json`。两端在工程根目录执行 `colcon build`，再加载 `install/setup.bash`、重启已有节点即可。模式节点直接使用 `register_ext_component_request_v1`、`register_ext_component_reply_v1`、`arming_check_*_v1` 和 `vehicle_local_position_v1`，无需消息转换节点或额外消息工作区。注册请求明确允许用户在 QGC 中选择 FlyCo。
+
+两端 ROS 域与飞控保持一致；当前实机飞控域为 66。曾经运行过旧转换节点的终端应先结束它；节点终端仅加载本工程环境。若仍显示 `waiting for PX4 registration reader`，检查该终端的域与 `/fmu/in/register_ext_component_request_v1` 的接收端。源码当前为 `feature/neural` 的 `0d092a91…`，与飞控报告的 `feature/vv_agentic` / `f026a1d…` 不同；已核对提供源码的使用接口，实际注册和融合仍需机载验证。
 
 ## 验证范围
 

@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>flyco_mode</name><version>0.1.0</version>
+  <description>FlyCo mode using the px4_ros2_ctrl ModeBase registration pattern.</description>
+  <maintainer email="2576640645@qq.com">YuanLinLiu</maintainer>
+  <license>BSD-3-Clause</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend><depend>px4_ros2_cpp</depend>
+  <depend>px4_msgs</depend><depend>std_msgs</depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

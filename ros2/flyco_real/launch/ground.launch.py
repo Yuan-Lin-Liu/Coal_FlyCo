@@ -29,14 +29,25 @@ def build(context):
         Path(os.environ.get('FLYCO_NATIVE_VENV', str(runtime / 'predictor'))) / 'bin/python'))
     models = path(arg('models_dir') or os.environ.get('FLYCO_MODELS', str(runtime / 'models')))
     cache = path(arg('cache_dir') or str(runtime / 'torch_extensions'))
-    cuda = path(arg('cuda_home') or os.environ.get('CUDA_HOME',
-                settings.get('ground_cuda_home', '/usr/local/cuda-11.8')))
+    cuda_setting = arg('cuda_home') or os.environ.get('CUDA_HOME', '')
+    cuda = path(cuda_setting or settings.get('ground_cuda_home', '/usr/local/cuda-11.8'))
+    local_cuda = root / '.local/deploy/cuda-root/usr/local/cuda-11.8'
+    if not cuda_setting and not os.access(cuda / 'bin/nvcc', os.X_OK):
+        cuda = local_cuda
     if not os.access(predictor, os.X_OK):
-        raise FileNotFoundError('Prediction Python missing: %s; set model_python:=/path/to/python' % predictor)
+        raise FileNotFoundError('Prediction Python missing: %s; run bash tools/setup_ground_predictor.sh '
+                               'from the project root, then set model_python:=/path/to/python' % predictor)
     for checkpoint in ('mesh/checkpoint.pt', 'mesh/snet-n3k-wonormal.pth'):
         if not (models / checkpoint).is_file():
             raise FileNotFoundError('Prediction checkpoint missing: ' + str(models / checkpoint))
+    if not os.access(cuda / 'bin/nvcc', os.X_OK) or not (cuda / 'include/cuda_runtime_api.h').is_file():
+        raise FileNotFoundError(
+            'CUDA compiler or headers missing: %s; set cuda_home:=%s '
+            '(install with bash tools/setup_ground_predictor.sh)' % (cuda, local_cuda))
     cache.mkdir(parents=True, exist_ok=True)
+    # PyTorch's CUDA wheels supply library headers absent from the minimal toolkit.
+    cuda_headers = sorted((predictor.parent.parent / 'lib').glob(
+        'python*/site-packages/nvidia/*/include'))
     environment = {
         'FLYCO_MODELS': str(models),
         'MESH_PREDICT_MESH_CKPT': str(models / 'mesh/checkpoint.pt'),
@@ -45,8 +56,15 @@ def build(context):
         'TORCH_EXTENSIONS_DIR': str(cache), 'CUDA_HOME': str(cuda),
         'PATH': str(cuda / 'bin') + os.pathsep + os.environ.get('PATH', ''),
         'LD_LIBRARY_PATH': str(cuda / 'lib64') + os.pathsep + os.environ.get('LD_LIBRARY_PATH', ''),
+        'CPATH': os.pathsep.join([str(p) for p in cuda_headers]
+                                + [os.environ.get('CPATH', '')]).rstrip(os.pathsep),
+        'MAX_JOBS': os.environ.get('MAX_JOBS', '2'),
         'PYTHONDONTWRITEBYTECODE': '1',
+        'PYTHONNOUSERSITE': '1',
     }
+    pointnet_extension = cache / '_ext/_ext.so'
+    if pointnet_extension.is_file() and not os.environ.get('POINTNET2_OPS_EXTENSION_PATH'):
+        environment['POINTNET2_OPS_EXTENSION_PATH'] = str(pointnet_extension)
     actions = [SetEnvironmentVariable(key, value) for key, value in environment.items()]
     if arg('start_semantic').lower() == 'true':
         semantic_root = path(arg('semantic_root') or str(root / 'third_party/SAM_AD_Perception'))
