@@ -18,6 +18,30 @@
 
 模型清单：[预测权重](../config/models.json)、[语义资产](../third_party/SAM_AD_Perception/assets.lock.json)、[语义服务 Python 依赖](../third_party/SAM_AD_Perception/requirements-server.txt)。服务依赖清单来自桌面环境；Orin 的 PyTorch/CUDA 和 Python 依赖版本需匹配 JetPack，不照搬桌面的 cu128 环境。地面预测 Python 环境须兼容 ROS2 Humble 的 Python 3.10，并能导入 `rclpy`、`cv_bridge`；语义服务通过 HTTP 连接，可使用独立模型环境。
 
+对于当前部署的 Jetson Linux **R36.4.0 / JetPack 6.1 / Python 3.10**，先通过已配置的
+R36.4 NVIDIA 软件源安装计算组件：
+
+```bash
+sudo apt install -y --no-install-recommends cuda-toolkit-12-6 \
+  libcudnn9-cuda-12 libcudnn9-dev-cuda-12 python3-venv python3-dev libopenblas-dev
+```
+
+然后在 Orin 的项目根目录安装语义模型环境：
+
+```bash
+bash tools/setup_semantic_jetson.sh
+```
+
+该入口使用 Jetson AI Lab `jp6/cu126` 的 ARM64 PyTorch 2.8.0 / TorchVision 0.23.0
+配对安装包，校验安装包哈希，在 `third_party/SAM_AD_Perception/.venv` 创建 Python 3.10
+环境并准备后端 A 的模型资产。Python 3.10 使用 scikit-image 0.25.2；推理服务采用
+headless OpenCV，UI 继续使用地面环境。桌面依赖清单保持原样。安装过程需要访问
+PyPI、Jetson AI Lab、GitHub 和模型资产下载源；已有有效资产会复用。
+
+安装完成后直接启动 `ros2 launch flyco_real semantic.launch.py`，由服务加载模型并完成
+GPU 预热。启动服务无需激活 `.venv`，也无需重新编译 ROS2 包。该 ARM64 安装路径已核对
+轮子元数据、CUDA 12.6 链接依赖和脚本语法；本机 x86_64 无法替代 Orin 的实际 GPU 启动验收。
+
 两端拉取已发布的分支并创建各自的 Odin 配置；保留原有 `vehicle.local.yaml`：
 
 ```bash
