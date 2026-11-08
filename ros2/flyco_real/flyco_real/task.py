@@ -71,6 +71,13 @@ def mode_task(node, action):
         last_rx[0] = time.monotonic()
     node.create_subscription(String, '/flyco/control/status', update,
                              QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+    if action == 'wait-armed':
+        print('Waiting for registered FlyCo mode to be normally armed before starting algorithms', flush=True)
+        wait_for(node, lambda: status.get('registered_mode_id') is not None and
+                 status.get('mode') == 'FlyCo' and status.get('armed') is True,
+                 float('inf'), 'FlyCo arming wait interrupted')
+        print('FlyCo armed; starting algorithms', flush=True)
+        return
     wait_for(node, lambda: bool(status), 5., 'No FlyCo status; start the mode node first')
     if action == 'status':
         print(json.dumps(status, ensure_ascii=False, indent=2))
@@ -149,7 +156,7 @@ def planner_task(node, args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', nargs='?', choices=[*CONTROL_ACTIONS, 'status', 'select-mode', 'arm',
+    parser.add_argument('action', nargs='?', choices=[*CONTROL_ACTIONS, 'status', 'select-mode', 'arm', 'wait-armed',
                         'initialize', 'enable-planning', 'scan', 'text'])
     parser.add_argument('text', nargs='?')
     parser.add_argument('--sim', action='store_true', help='Use Isaac odometry and /clock')
@@ -164,7 +171,7 @@ def main():
     try:
         if args.action in CONTROL_ACTIONS:
             control_task(node, args.action)
-        elif args.action in ('status', 'select-mode', 'arm'):
+        elif args.action in ('status', 'select-mode', 'arm', 'wait-armed'):
             mode_task(node, args.action)
         else:
             planner_task(node, args)

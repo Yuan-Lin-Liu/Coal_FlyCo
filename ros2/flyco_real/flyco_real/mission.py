@@ -1,4 +1,4 @@
-"""Initialize FlyCo and take off once after an armed, landed Position -> FlyCo switch."""
+"""Initialize FlyCo and take off once after an armed activation on the ground."""
 import json
 import math
 import time
@@ -20,6 +20,7 @@ class FlyCoMission(Node):
             return self.get_parameter(name).value
         self.odom_topic = param('odom_topic', '/flyco/odom')
         self.gimbal_topic = param('gimbal_topic', '/flyco/gimbal_pose')
+        self.takeoff_on_armed_flyco = param('takeoff_on_armed_flyco', False)
         self.odom = self.odom_rx = self.gimbal_rx = None
         self.control, self.control_rx = {}, None
         self.initialized = False
@@ -53,15 +54,25 @@ class FlyCoMission(Node):
 
     def on_control(self, msg):
         previous_mode = self.control.get('mode')
+        previously_armed = self.control.get('armed', False)
         self.control, self.control_rx = json.loads(msg.data), time.monotonic()
-        if previous_mode == 'POSCTL' and self.control.get('mode') == 'FlyCo':
-            if not self.initialized:
+        if self.activation_deadline is not None and (self.control.get('mode') != 'FlyCo' or
+                not self.control.get('armed') or self.control.get('landed') is not True):
+            self.activation_deadline = None
+            self.report('waiting_for_arming', 'Activation cancelled; select FlyCo and normally arm to try again')
+        activated = previous_mode == 'POSCTL' and self.control.get('mode') == 'FlyCo'
+        if self.takeoff_on_armed_flyco:
+            activated = (self.control.get('mode') == 'FlyCo' and self.control.get('armed') is True and
+                         self.control.get('landed') is True and
+                         (previous_mode != 'FlyCo' or not previously_armed))
+        if activated:
+            if not self.initialized and not self.takeoff_on_armed_flyco:
                 self.report('blocked', 'Planner not initialized; return to Position before trying again')
             elif not self.control.get('armed') or self.control.get('landed') is not True:
                 self.report('waiting_for_position', 'Auto takeoff requires an already armed vehicle on the ground')
             elif self.takeoff_future is None:
-                self.activation_deadline = time.monotonic()+3.
-                self.report('activating', 'Position -> FlyCo detected; waiting for mode executor ownership')
+                self.activation_deadline = time.monotonic()+(3. if self.initialized else 30.)
+                self.report('activating', 'Armed FlyCo ground activation; waiting for initialization and mode executor ownership')
 
     def odom_ok(self):
         if self.odom is None or self.odom_rx is None or time.monotonic()-self.odom_rx > .4:
@@ -83,7 +94,10 @@ class FlyCoMission(Node):
         if not self.initialized:
             if self.count_publishers('/local_newest_traj') > 0:
                 self.initialized = True
-                self.report('waiting_for_position', 'FlyCo ready; normally arm on the ground in Position, then select FlyCo')
+                if self.takeoff_on_armed_flyco:
+                    self.report('ready', 'FlyCo ready; waiting for the armed ground activation to take off')
+                else:
+                    self.report('waiting_for_position', 'FlyCo ready; normally arm on the ground in Position, then select FlyCo')
             elif (self.odom_ok() and self.gimbal_rx is not None and now-self.gimbal_rx <= .4 and
                     self.joy.get_subscription_count() >= 1 and now-self.last_initial >= 1.):
                 self.publish_joy(4)

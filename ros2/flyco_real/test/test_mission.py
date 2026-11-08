@@ -29,7 +29,7 @@ class MissionFixture:
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.odom = self.provider.create_publisher(Odometry, '/flyco/odom', 10)
         self.gimbal = self.provider.create_publisher(QuaternionStamped, '/flyco/gimbal_pose', 10)
-        self.provider.create_subscription(Joy, '/joy', self.on_joy, 10)
+        self.joy_subscription = self.provider.create_subscription(Joy, '/joy', self.on_joy, 10)
         self.provider.create_service(Trigger, '/flyco/control/takeoff', self.takeoff)
         self.provider.create_timer(.02, self.publish)
 
@@ -133,3 +133,42 @@ def test_rejected_takeoff_is_reported_without_automatic_retries(mission):
     assert mission.mission.phase == 'blocked'
     mission.spin(.3)
     assert mission.requests == 1
+
+
+def test_combined_entry_waits_for_flyco_arming_and_does_not_repeat_on_return(mission):
+    mission.mission.takeoff_on_armed_flyco = True
+    mission.control.update(mode='FlyCo', armed=False)
+    mission.initialize()
+    assert mission.requests == 0
+    mission.control['armed'] = True
+    mission.spin(.3)
+    assert mission.requests == 1
+    mission.control.update(mode='FlyCo', takeoff_phase='complete', landed=False)
+    mission.z = 2.1
+    mission.spin(.3)
+    assert mission.mission.phase == 'hovering'
+    assert mission.requests == 1
+
+
+def test_combined_entry_initializes_after_already_armed_ground_activation(mission):
+    mission.mission.takeoff_on_armed_flyco = True
+    mission.control['mode'] = 'FlyCo'
+    mission.initialize()
+    assert mission.requests == 1
+
+
+@pytest.mark.parametrize('change', [dict(mode='POSCTL'), dict(armed=False), dict(landed=False)])
+def test_combined_entry_cancels_pending_takeoff_when_ground_activation_is_lost(mission, change):
+    mission.mission.takeoff_on_armed_flyco = True
+    mission.control['mode'] = 'FlyCo'
+    # Keep initialization pending long enough for the operator/ground-state change.
+    mission.provider.destroy_subscription(mission.joy_subscription)
+    mission.spin(.15)
+    mission.control.update(change)
+    mission.spin(.15)
+    assert mission.requests == 0
+    assert mission.mission.activation_deadline is None
+    mission.planner = mission.provider.create_publisher(PolynomialTrajGroup, '/local_newest_traj', 1)
+    mission.spin(.3)
+    assert mission.mission.initialized
+    assert mission.requests == 0

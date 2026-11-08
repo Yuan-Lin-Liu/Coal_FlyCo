@@ -174,25 +174,17 @@ ros2 launch flyco_real ground.launch.py config:="$PWD/config/vehicle.odin.local.
   model_python:=/实际地面模型环境/bin/python models_dir:=/实际权重目录 rviz:=true
 ```
 
-**Orin 终端 D：注册与自动使能**：
-
-```bash
-ros2 launch flyco_real mode.launch.py config:="$PWD/config/vehicle.odin.local.yaml"
-```
-
-定位、飞控、地面心跳稳定后，节点自动注册并使能 FlyCo；不会自动解锁。
-
-**Orin 终端 E：FlyCo 机载算法与任务节点**：
+**Orin 终端 D：模式注册与解锁后启动算法**：
 
 ```bash
 ros2 launch flyco_real flyco.launch.py config:="$PWD/config/vehicle.odin.local.yaml"
 ```
 
-此入口复用独立 Odin 定位桥，不再创建第二个定位桥或模式节点；地面预测继续由地面 launch 运行。
+此入口复用独立 Odin 定位桥，立即启动模式注册与控制桥；FlyCo 正常解锁后再启动机载规划、跟踪/聚类和任务节点。地面预测继续由地面 launch 独立运行。不要同时启动另一个 `mode.launch.py`；如已使用独立模式节点联调，可给该命令增加 `start_mode:=false`。
 
 ## 4. 飞行操作
 
-等待机载终端出现 `FlyCo ready`，确认定位和地面预测链路正常。在地面以 **Position** 模式正常解锁，然后通过 RC/QGC 切换到 **FlyCo**。任务节点自动调度 PX4 内置 Takeoff，升至距本次地面位置约 2 m 后返回 FlyCo 悬停。起飞只触发一次；空中切模式、未解锁或落地状态未知时不自动起飞。
+确认定位和地面预测链路正常，等待 RC/QGC 出现 **FlyCo**，选择后在地面正常解锁；也支持在 Position 解锁后切入 FlyCo。解锁后算法自动启动，初始化完成输出 `FlyCo ready`，任务节点调度 PX4 内置 Takeoff，升至距本次地面位置约 2 m 后返回 FlyCo 悬停。返回 FlyCo 不会重复起飞；未解锁、空中或落地状态未知时不自动起飞。
 
 需要单独打开文字输入窗口时，在地面电脑执行 `ros2 launch flyco_real prompt.launch.py`，在 **FlyCo-UI** 底部 Text 输入英文描述，点击 **Send text** 发送。已有地面 UI 时不重复打开。
 

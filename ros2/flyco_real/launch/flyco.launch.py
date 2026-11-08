@@ -1,4 +1,4 @@
-"""Run FlyCo algorithms and automatic takeoff after Position -> FlyCo activation."""
+"""Register FlyCo, then start algorithms and the mission after normal arming."""
 import json
 import os
 from pathlib import Path
@@ -6,7 +6,8 @@ from pathlib import Path
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, EmitEvent, ExecuteProcess,
-                            IncludeLaunchDescription, OpaqueFunction, RegisterEventHandler)
+                            GroupAction, IncludeLaunchDescription, LogInfo, OpaqueFunction,
+                            RegisterEventHandler, SetEnvironmentVariable)
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -17,9 +18,10 @@ from launch_ros.actions import Node
 def build(context):
     def arg(name): return LaunchConfiguration(name).perform(context)
     simulation = arg('simulation').lower() == 'true'
+    share = Path(get_package_share_directory('flyco_real'))
     actions, critical = [], []
     node_env = {}
-    mission_params = {'use_sim_time': simulation}
+    mission_params = {'use_sim_time': simulation, 'takeoff_on_armed_flyco': True}
     if simulation:
         root = Path(arg('project_root')).expanduser().resolve()
         run = Path(arg('session_dir') or str(root/'runtime/latest')).expanduser().resolve()
@@ -40,23 +42,37 @@ def build(context):
             FLYCO_ISAAC_SEGMENTATION_ENDPOINT=session['segmentation_endpoint'])
         algorithms = ExecuteProcess(cmd=['bash', str(root/'tools/run_ros.sh')],
                                     cwd=str(root), additional_env=env, output='screen')
-        actions.append(algorithms)
         critical.append(algorithms)
         mission_params.update(odom_topic='/isaac/odom', gimbal_topic='/gimbal_pose')
         node_env = {'ROS_DOMAIN_ID': str(session['domain']), 'ROS_LOCALHOST_ONLY': '0'}
     else:
-        share = Path(get_package_share_directory('flyco_real'))
-        actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share/'launch/native.launch.py')),
+        algorithms = IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share/'launch/native.launch.py')),
             launch_arguments={'role': 'onboard', 'config': arg('config'), 'start_mode': 'false',
-                              'start_sensors': 'false'}.items()))
+                              'start_sensors': 'false'}.items())
     mission = Node(package='flyco_real', executable='mission.py', name='flyco_mission',
                    parameters=[mission_params], additional_env=node_env, output='screen')
-    actions.append(mission)
     critical.append(mission)
+    startup = []
     for process in critical:
-        actions.append(RegisterEventHandler(OnProcessExit(target_action=process,
+        startup.append(RegisterEventHandler(OnProcessExit(target_action=process,
             on_exit=[EmitEvent(event=Shutdown(reason='FlyCo algorithm or mission node exited'))])))
-    return actions
+    startup.extend([algorithms, mission])
+    if arg('start_mode').lower() == 'true':
+        actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share/'launch/mode.launch.py')),
+            launch_arguments={'simulation': str(simulation).lower(), 'config': arg('config')}.items()))
+    gate = Node(package='flyco_real', executable='task.py', name='flyco_arming_gate',
+                arguments=['wait-armed'], parameters=[{'use_sim_time': simulation}], output='screen')
+    def after_arming(event, launch_context):
+        if launch_context.is_shutdown:
+            return []
+        if event.returncode != 0:
+            return [EmitEvent(event=Shutdown(reason='FlyCo arming wait failed'))]
+        return [LogInfo(msg='FlyCo armed; launching algorithms and mission'), *startup]
+    actions.extend([RegisterEventHandler(OnProcessExit(target_action=gate, on_exit=after_arming)), gate])
+    # Registration, arming wait and mission must share the simulator's DDS domain
+    # even when the operator starts this command from an unconfigured terminal.
+    environment = [SetEnvironmentVariable(k, v) for k, v in node_env.items()]
+    return [GroupAction(actions=environment+actions)]
 
 
 def generate_launch_description():
@@ -67,5 +83,7 @@ def generate_launch_description():
         DeclareLaunchArgument('project_root', default_value=os.environ.get('COAL_FLYCO_ROOT', str(Path.cwd()))),
         DeclareLaunchArgument('session_dir', default_value=''),
         DeclareLaunchArgument('ui', default_value='false'),
+        DeclareLaunchArgument('start_mode', default_value='true',
+                             description='Register FlyCo here; false only when a separate mode node is already running'),
         OpaqueFunction(function=build),
     ])

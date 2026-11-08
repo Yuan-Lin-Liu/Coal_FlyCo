@@ -497,19 +497,15 @@ ros2 launch flyco_real mode.launch.py \
 ros2 run flyco_real task.py enable
 ```
 
-完成首轮联调后，日常可使用仓库默认自动使能入口，替换上面那一个模式节点：
+完成首轮联调后，停止上面的独立模式节点，日常使用下一节的合并入口即可完成模式注册、自动使能和解锁后启动机载算法。
 
-```bash
-ros2 launch flyco_real mode.launch.py config:="$PWD/config/vehicle.odin.local.yaml"
-```
-
-### 8.6 Orin E：机载算法与任务节点
+### 8.6 Orin：合并注册、解锁后启动机载算法与任务节点
 
 ```bash
 ros2 launch flyco_real flyco.launch.py config:="$PWD/config/vehicle.odin.local.yaml"
 ```
 
-该入口复用已有定位桥与模式节点，运行规划、轨迹服务器、目标跟踪/聚类和任务调度；等待输出 `FlyCo ready`。
+该入口复用已有定位桥，立即启动模式注册和控制桥。选择 FlyCo 并正常解锁后，自动启动规划、轨迹服务器、目标跟踪/聚类和任务调度；初始化完成输出 `FlyCo ready`。不要同时运行另一份模式注册节点；若继续复用上一节的独立模式节点，给命令增加 `start_mode:=false`。
 
 ### 8.7 两端观察链路
 
@@ -537,7 +533,7 @@ ros2 topic list -t | rg '/fmu/|/flyco/|/prediction/'
 
 先在不解锁、拆桨的状态完成设备、坐标、PX4 融合、双机预测及模式注册检查；确认手动移动机体时 RViz/PX4 的位置方向和姿态一致。
 
-进入实际飞行阶段后，工程的常规触发方式是：**地面 Position 正常解锁 → RC/QGC 切入 FlyCo → 自动调用 PX4 Takeoff → 约 2 m 后返回 FlyCo 悬停**。不是运行 launch 就自动起飞，也不是手动切入 Offboard。Orin E 的任务节点已经包含该自动起飞逻辑。
+进入实际飞行阶段后，工程的常规触发方式是：**选择 FlyCo → 地面正常解锁 → 自动启动算法并初始化 → PX4 Takeoff → 约 2 m 后返回 FlyCo 悬停**。也支持先在 Position 解锁再切入 FlyCo。launch 本身不解锁；空中激活、地面状态未知或初始化期间取消解锁/模式时不自动起飞。
 
 悬停后，在地面已加载环境的终端执行：
 

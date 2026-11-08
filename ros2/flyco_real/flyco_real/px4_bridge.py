@@ -65,6 +65,7 @@ class PX4Bridge(Node):
         self.reason = 'disabled'
         self.ground_rx = None
         self._last_status = None
+        self._last_status_at = 0.
         self._last_command_stamp = -math.inf
         self.land_pending = None
         self.land_result = 'none'
@@ -503,10 +504,14 @@ class PX4Bridge(Node):
             'odom_ok':self.odom_ok(),'px4_ok':not bool(issue),
             'ground_ok':fresh(self.ground_rx,time.monotonic(),self.settings['ground_link_timeout']),
             'px4_issue':issue,'reason':self.reason,'land_result':self.land_result})
-        if value != self._last_status:
+        changed = value != self._last_status
+        now = time.monotonic()
+        if changed or now-self._last_status_at >= .5:
             self.status.publish(String(data=value))
-            self.get_logger().info(value)
+            if changed:
+                self.get_logger().info(value)
             self._last_status = value
+            self._last_status_at = now
 
 def main():
     from flyco_common.execution import main_for
