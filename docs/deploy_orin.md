@@ -41,6 +41,14 @@ headless OpenCV，UI 继续使用地面环境。桌面依赖清单保持原样�
 引导升级 pip 时绕过 HTTP 缓存，后续使用新版 pip 的下载重试与续传；所有哈希校验保留。
 若下载中断后提示哈希不一致，可更新代码后重跑同一安装命令，已有虚拟环境和有效资产会复用。
 
+若 Jetson AI Lab 的 PyTorch 下载过慢，可在网络较快的电脑下载脚本中固定 URL 对应的
+`torch-2.8.0-cp310-cp310-linux_aarch64.whl` 和
+`torchvision-0.23.0-cp310-cp310-linux_aarch64.whl`，通过局域网或 U 盘传入 Orin 的
+`.local/deploy/jetson-wheels/` 后重跑脚本。脚本优先使用这些本地文件，仍按原 SHA256 校验；
+缺少的文件继续从原地址下载。也可通过 `SAM_AD_WHEEL_DIR` 指定存放目录。
+清华镜像仅加速普通 Python 包，不会替换脚本指定的 Jetson GPU 包直链。
+这两个包仅解决 PyTorch 安装，后续模型权重仍需下载。
+
 安装完成后直接启动 `ros2 launch flyco_real semantic.launch.py`，由服务加载模型并完成
 GPU 预热。启动服务无需激活 `.venv`，也无需重新编译 ROS2 包。该 ARM64 安装路径已核对
 轮子元数据、CUDA 12.6 链接依赖和脚本语法；本机 x86_64 无法替代 Orin 的实际 GPU 启动验收。

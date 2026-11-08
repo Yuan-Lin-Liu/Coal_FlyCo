@@ -7,6 +7,7 @@ sam_root="$project_root/third_party/SAM_AD_Perception"
 sam_python="${SAM_AD_PYTHON:-/usr/bin/python3.10}"
 sam_cuda="${CUDA_HOME:-/usr/local/cuda-12.6}"
 sam_pip_index="${SAM_AD_PIP_INDEX_URL:-https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple}"
+sam_wheel_dir="${SAM_AD_WHEEL_DIR:-$project_root/.local/deploy/jetson-wheels}"
 
 if [[ "$(uname -m)" != aarch64 ]] || ! grep -Eq 'R36 .*REVISION: 4\.' /etc/nv_tegra_release 2>/dev/null; then
   echo 'This installer requires Jetson Linux R36.4 (ARM64).' >&2
@@ -49,11 +50,25 @@ PY
 "$model_python" -m pip install --index-url "$sam_pip_index" \
   --no-cache-dir --retries 10 --upgrade 'pip>=25.2,<27' setuptools wheel
 # Jetson AI Lab JP6/cu126 ARM64 builds. Hashes pin these exact CUDA packages.
+sam_wheels=(
+  'https://pypi.jetson-ai-lab.io/jp6/cu126/+f/62a/1beee9f2f1470/torch-2.8.0-cp310-cp310-linux_aarch64.whl#sha256=62a1beee9f2f147076a974d2942c90060c12771c94740830327cae705b2595fc'
+  'https://pypi.jetson-ai-lab.io/jp6/cu126/+f/907/c4c1933789645/torchvision-0.23.0-cp310-cp310-linux_aarch64.whl#sha256=907c4c1933789645ebb20dd9181d40f8647978e6bd30086ae7b01febb937d2d1'
+)
+# Prefer transferred wheels to slow WAN downloads, preserving the pinned hashes.
+for sam_index in "${!sam_wheels[@]}"; do
+  sam_url="${sam_wheels[$sam_index]}"
+  sam_filename="${sam_url##*/}"
+  sam_filename="${sam_filename%%#*}"
+  if [[ -f "$sam_wheel_dir/$sam_filename" ]]; then
+    sam_file_url="$("$sam_python" -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().as_uri())' "$sam_wheel_dir/$sam_filename")"
+    sam_wheels[$sam_index]="$sam_file_url#${sam_url#*#}"
+    echo "Using local wheel: $sam_wheel_dir/$sam_filename"
+  fi
+done
 "$model_python" -m pip install --index-url "$sam_pip_index" \
   --retries 10 --resume-retries 10 \
   --constraint "$sam_root/.venv/constraints-jetson.txt" \
-  'https://pypi.jetson-ai-lab.io/jp6/cu126/+f/62a/1beee9f2f1470/torch-2.8.0-cp310-cp310-linux_aarch64.whl#sha256=62a1beee9f2f147076a974d2942c90060c12771c94740830327cae705b2595fc' \
-  'https://pypi.jetson-ai-lab.io/jp6/cu126/+f/907/c4c1933789645/torchvision-0.23.0-cp310-cp310-linux_aarch64.whl#sha256=907c4c1933789645ebb20dd9181d40f8647978e6bd30086ae7b01febb937d2d1' \
+  "${sam_wheels[@]}" \
   --requirement "$sam_root/.venv/requirements-jetson.txt"
 
 # Download only backend A; existing verified assets are reused.
