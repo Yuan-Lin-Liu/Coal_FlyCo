@@ -22,7 +22,7 @@ limitations under the License.
 #ifdef ROS2
     #include <functional>
     #include <yaml-cpp/yaml.h>
-    #include <ament_index_cpp/get_package_share_directory.hpp>
+    #include <rcpputils/filesystem_helper.hpp>
 #else
     #include <boost/bind.hpp>
 #endif
@@ -44,6 +44,16 @@ static bool fileExists(const std::string& filename) {
 }
 
 #ifdef ROS2
+// Helper function to get package source directory for ROS2
+static std::string get_package_source_directory() {
+    std::string current_file = __FILE__;
+    size_t pos = current_file.find("/src/cloud_reprojection_ros.cpp");
+    if (pos != std::string::npos) {
+        return current_file.substr(0, pos);
+    }
+    return "";
+}
+
 // ==================== ROS2 Implementation ====================
 
 CloudReprojectionRosNode::CloudReprojectionRosNode(const rclcpp::NodeOptions& options)
@@ -243,12 +253,9 @@ int main(int argc, char** argv)
 
     auto temp_node = std::make_shared<rclcpp::Node>("cloud_reprojection_check");
     
-    // Check if reprojection is enabled from the installed control config.
-    const std::string default_config_file =
-        ament_index_cpp::get_package_share_directory("odin_ros_driver") +
-        "/config/control_command.yaml";
-    const std::string config_file = temp_node->declare_parameter<std::string>(
-        "config_file", default_config_file);
+    // Check if reprojection is enabled from control_command.yaml
+    std::string package_path = get_package_source_directory();
+    std::string config_file = package_path + "/config/control_command.yaml";
     
     try {
         YAML::Node config = YAML::LoadFile(config_file);

@@ -1,12 +1,13 @@
 """Point-cloud, camera and gimbal adaptation; odometry is owned by ros2_px4_odometry."""
 import copy
+from pathlib import Path
 import numpy as np
 import cv2
-from cv_bridge import CvBridge
+import yaml
 from scipy.spatial.transform import Rotation
 from rclpy.node import Node
 from rclpy.time import Time
-from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy
+from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import TransformStamped, QuaternionStamped
 from airsim_ros_pkgs.msg import GimbalAngleEulerCmd
 from nav_msgs.msg import Odometry
@@ -14,6 +15,7 @@ from sensor_msgs.msg import PointCloud2, Image, CameraInfo
 from sensor_msgs_py import point_cloud2
 from tf2_ros import Buffer, TransformListener, StaticTransformBroadcaster, TransformException
 from .geometry import pose_matrix, tf_matrix, transform_matrix, planner_gimbal
+from .odin_camera import camera_calibration, image_array
 
 
 class PerceptionBridge(Node):
@@ -32,8 +34,11 @@ class PerceptionBridge(Node):
         self.max_age = param('max_sensor_age', .4)
         self.voxel = param('cloud_voxel_size', .15)
         self.image_is_rectified = param('image_is_rectified', True)
+        self.odin_native = param('odin_native_driver', False)
+        self.odin_calibration = Path(param('odin_calibration_file',
+            str(Path.home() / '.ros/odin_ros_driver/calib.yaml'))).expanduser()
         self.camera_info = self.rectification = self.calibration_key = self.body_pose = None
-        self.cv_bridge = CvBridge()
+        self._device_time_warned = False
         self.tf_buffer = Buffer(node=self)
         self.listener = TransformListener(self.tf_buffer, self)
         if self.world != self.lio_frame:
@@ -51,16 +56,33 @@ class PerceptionBridge(Node):
         self.image_pub = self.create_publisher(Image, '/flyco/camera/rgb', 2)
         self.info_pub = self.create_publisher(CameraInfo, '/flyco/camera/info',
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        native_qos = QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE,
+                                durability=DurabilityPolicy.VOLATILE) if self.odin_native else qos_profile_sensor_data
         self.create_subscription(Odometry, '/flyco/odom', self.on_odom, qos_profile_sensor_data)
-        self.create_subscription(PointCloud2, param('cloud_topic', '/odin1/cloud_slam'), self.on_cloud, qos_profile_sensor_data)
-        self.create_subscription(Image, param('image_topic', '/odin1/image/undistorted'), self.on_image, qos_profile_sensor_data)
-        self.create_subscription(CameraInfo, param('camera_info_topic', '/odin1/camera_info'), self.on_info, qos_profile_sensor_data)
+        self.create_subscription(PointCloud2, param('cloud_topic', '/odin1/cloud_slam'), self.on_cloud, native_qos)
+        self.create_subscription(Image, param('image_topic', '/odin1/image/undistorted'), self.on_image, native_qos)
+        if self.odin_native:
+            self.create_timer(1., self.load_odin_calibration)
+            self.load_odin_calibration()
+        else:
+            self.create_subscription(CameraInfo, param('camera_info_topic', '/odin1/camera_info'), self.on_info, native_qos)
         self.create_subscription(GimbalAngleEulerCmd, '/flyco/gimbal/legacy_command', self.on_gimbal_command, 10)
         self.create_timer(1. / 30., self.publish_camera_pose)
         self.get_logger().info('Camera/cloud adaptation; odometry and PX4 forwarding run in ros2_px4_odometry')
 
     def current(self, stamp):
         age = (self.get_clock().now().nanoseconds - Time.from_msg(stamp).nanoseconds) * 1.e-9
+        # The unmodified Odin SDK may publish its device-boot clock even when
+        # use_host_ros_time is requested in the launch-time control file. A
+        # large epoch mismatch identifies that clock domain; receipt freshness
+        # is then enforced by the ROS subscription itself. Do not discard live
+        # camera/cloud packets solely because their source clock is different.
+        if abs(age) > 60.:
+            if not self._device_time_warned:
+                self.get_logger().warning(
+                    'Odin device clock differs from ROS clock; accepting live sensor packets by receipt time')
+                self._device_time_warned = True
+            return True
         return -.05 <= age <= self.max_age
 
     def lookup(self, target, source, stamp):
@@ -105,7 +127,9 @@ class PerceptionBridge(Node):
             self.get_logger().warning('Cloud transform unavailable: ' + str(error), throttle_duration_sec=5.)
 
     def on_image(self, msg):
-        if not self.current(msg.header.stamp) or msg.header.frame_id != self.input_camera or self.camera_info is None:
+        if not self.current(msg.header.stamp) or self.camera_info is None:
+            return
+        if msg.header.frame_id != self.input_camera and not (self.odin_native and not msg.header.frame_id):
             return
         if (msg.width, msg.height) != (self.camera_info.width, self.camera_info.height):
             self.get_logger().error('Image resolution differs from CameraInfo', throttle_duration_sec=5.)
@@ -113,14 +137,26 @@ class PerceptionBridge(Node):
         if self.image_is_rectified:
             output = copy.deepcopy(msg)
         elif self.rectification is not None:
-            raw = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
+            raw = image_array(msg)
             corrected = cv2.remap(raw, *self.rectification, interpolation=cv2.INTER_LINEAR)
-            output = self.cv_bridge.cv2_to_imgmsg(corrected, encoding='rgb8')
-            output.header = copy.deepcopy(msg.header)
+            output = Image(header=copy.deepcopy(msg.header), width=msg.width, height=msg.height,
+                encoding=msg.encoding, is_bigendian=False, step=msg.width * 3, data=corrected.tobytes())
         else:
             return
         output.header.frame_id = self.camera
+        self.camera_info.header = copy.deepcopy(output.header)
+        self.info_pub.publish(self.camera_info)
         self.image_pub.publish(output)
+
+    def load_odin_calibration(self):
+        if self.camera_info is not None:
+            return
+        try:
+            document = yaml.safe_load(self.odin_calibration.read_text())
+            self.camera_info, self.rectification = camera_calibration(document, self.camera)
+            self.get_logger().info('Native Odin calibration loaded: ' + str(self.odin_calibration))
+        except (OSError, ValueError, KeyError, TypeError, yaml.YAMLError) as error:
+            self.get_logger().warning('Waiting for native Odin calibration: ' + str(error), throttle_duration_sec=5.)
 
     def on_info(self, msg):
         if msg.header.frame_id != self.input_camera or msg.k[0] <= 0. or msg.k[4] <= 0.:

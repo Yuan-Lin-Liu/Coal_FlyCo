@@ -3,6 +3,7 @@ import json
 import os
 import time
 from pathlib import Path
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -66,7 +67,27 @@ def build(context, state=None):
     else:
         algorithms = IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share/'launch/native.launch.py')),
             launch_arguments={'role': 'onboard', 'config': arg('config'), 'start_mode': 'false',
-                              'start_sensors': 'false'}.items())
+                              'start_sensors': 'false',
+                              'segmentation_endpoint': arg('segmentation_endpoint'),
+                              'segmentation_timeout': arg('segmentation_timeout')}.items())
+        if arg('start_semantic').lower() == 'true':
+            root = Path(arg('project_root')).expanduser().resolve()
+            try:
+                settings = yaml.safe_load(Path(arg('config')).expanduser().read_text()) or {}
+            except (OSError, yaml.YAMLError):
+                settings = {}
+            deployment = settings.get('deployment', {})
+            semantic_root = Path(arg('semantic_root') or str(root / 'third_party/SAM_AD_Perception')).expanduser()
+            semantic_python = Path(arg('semantic_python') or str(semantic_root / '.venv/bin/python')).expanduser()
+            semantic = ExecuteProcess(
+                cmd=[str(semantic_python), '-B', '-m', 'sam_ad.server', '--backend', 'A',
+                     '--bind', str(deployment.get('semantic_bind', '127.0.0.1')),
+                     '--port', str(deployment.get('semantic_port', 8851))],
+                cwd=str(semantic_root), name='semantic_perception', output='screen')
+            actions.append(semantic)
+            actions.append(RegisterEventHandler(OnProcessExit(
+                target_action=semantic,
+                on_exit=[EmitEvent(event=Shutdown(reason='Semantic perception service exited'))])))
     mission = Node(package='flyco_real', executable='mission.py', name='flyco_mission',
                    parameters=[mission_params], additional_env=node_env, output='screen')
     critical.append(mission)
@@ -112,5 +133,12 @@ def generate_launch_description():
         DeclareLaunchArgument('qgc_path', default_value=str(Path.home()/'QGroundControl-x86_64.AppImage')),
         DeclareLaunchArgument('start_mode', default_value='true',
                              description='Register FlyCo here; false only when a separate mode node is already running'),
+        DeclareLaunchArgument('start_semantic', default_value='true'),
+        DeclareLaunchArgument('semantic_root', default_value=''),
+        DeclareLaunchArgument('semantic_python', default_value=''),
+        DeclareLaunchArgument('segmentation_endpoint', default_value='',
+                              description='Override the HTTP semantic service endpoint for onboard tracking'),
+        DeclareLaunchArgument('segmentation_timeout', default_value='',
+                              description='Override the HTTP semantic request timeout in seconds'),
         OpaqueFunction(function=build, kwargs={'state': {'simulation_started': False, 'deadline': time.monotonic()+180.}}),
     ])

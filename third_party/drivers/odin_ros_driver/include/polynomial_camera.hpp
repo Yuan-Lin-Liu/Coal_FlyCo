@@ -35,7 +35,7 @@ public:
                     double k2=0.0, double k3=0.0, double k4=0.0, 
                     double k5=0.0, double k6=0.0, double k7=0.0)
         : fx_(fx), fy_(fy), cx_(cx), cy_(cy), skew_(skew),
-          distortion_(std::abs(k2)+std::abs(k3)+std::abs(k4)+std::abs(k5)+std::abs(k6)+std::abs(k7) > 1e-9) {
+          distortion_(std::abs(k2) > 1e-7) {
         k2_ = k2; k3_ = k3; k4_ = k4; k5_ = k5; k6_ = k6; k7_ = k7;
     }
 

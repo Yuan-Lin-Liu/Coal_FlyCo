@@ -15,7 +15,7 @@ from geometry_msgs.msg import QuaternionStamped, TransformStamped
 from nav_msgs.msg import Odometry
 from px4_msgs.msg import VehicleOdometry
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2
 from sensor_msgs_py import point_cloud2
@@ -28,6 +28,13 @@ from flyco_real.geometry import tf_matrix
 def test_cpp_odin_forwarding_and_perception(tmp_path):
     share = Path(get_package_share_directory('flyco_real'))
     profile = yaml.safe_load((share / 'config/odin.yaml').read_text())
+    calibration_file = tmp_path / 'calib.yaml'
+    calibration_file.write_text(yaml.safe_dump({'cam_0': {
+        'image_width': 32, 'image_height': 24, 'A11': 20., 'A12': 0.,
+        'A22': 20., 'u0': 16., 'v0': 12.,
+        **{'k%d' % i: 0. for i in range(2, 8)},
+    }}))
+    profile['perception_bridge']['ros__parameters']['odin_calibration_file'] = str(calibration_file)
     config = tmp_path / 'vehicle.yaml'
     config.write_text(yaml.safe_dump(profile))
     log_path = tmp_path / 'launch.log'
@@ -41,9 +48,9 @@ def test_cpp_odin_forwarding_and_perception(tmp_path):
     fake.create_subscription(CameraInfo, '/flyco/camera/info', infos.append, 10)
     fake.create_subscription(QuaternionStamped, '/flyco/gimbal_pose', feedback.append, 10)
     odom = fake.create_publisher(Odometry, '/odin1/odometry_highfreq', qos_profile_sensor_data)
-    cloud = fake.create_publisher(PointCloud2, '/odin1/cloud_slam', qos_profile_sensor_data)
-    image = fake.create_publisher(Image, '/odin1/image/undistorted', qos_profile_sensor_data)
-    info = fake.create_publisher(CameraInfo, '/odin1/camera_info', qos_profile_sensor_data)
+    official_sensor_qos = QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE)
+    cloud = fake.create_publisher(PointCloud2, '/odin1/cloud_slam', official_sensor_qos)
+    image = fake.create_publisher(Image, '/odin1/image', official_sensor_qos)
     broadcaster = TransformBroadcaster(fake)
     buffer = Buffer(node=fake)
     listener = TransformListener(buffer, fake)
@@ -70,13 +77,11 @@ def test_cpp_odin_forwarding_and_perception(tmp_path):
             camera.transform.rotation.z, camera.transform.rotation.w = -.5, .5
             broadcaster.sendTransform([imu, lidar, camera])
         cloud.publish(point_cloud2.create_cloud_xyz32(msg.header, [[3.3, 0., 1.]]))
-        header = Header(stamp=stamp, frame_id='odin_camera_optical_frame')
-        calibration = CameraInfo(header=header, width=32, height=24, distortion_model='plumb_bob', d=[0.]*5)
-        calibration.k = [20., 0., 16., 0., 20., 12., 0., 0., 1.]
-        calibration.r = np.eye(3).flatten().tolist()
-        calibration.p = [20., 0., 16., 0., 0., 20., 12., 0., 0., 0., 1., 0.]
-        info.publish(calibration)
-        image.publish(Image(header=header, width=32, height=24, encoding='bgr8', step=96, data=bytes(32*24*3)))
+        # The official driver has an empty image frame and no CameraInfo topic.
+        header = Header(stamp=stamp)
+        pixels = np.zeros((24, 32, 3), dtype=np.uint8)
+        pixels[12, 16] = [17, 23, 41]
+        image.publish(Image(header=header, width=32, height=24, encoding='bgr8', step=96, data=pixels.tobytes()))
 
     fake.create_timer(.01, publish)
     log = log_path.open('w')
@@ -110,6 +115,10 @@ def test_cpp_odin_forwarding_and_perception(tmp_path):
         stamps = {Time.from_msg(m.header.stamp).nanoseconds//1000 for m in outputs}
         assert any(m.timestamp_sample in stamps for m in visions)
         assert images[-1].header.frame_id == infos[-1].header.frame_id == 'camera_0'
+        assert images[-1].encoding == 'bgr8'
+        np.testing.assert_array_equal(np.frombuffer(images[-1].data, np.uint8).reshape(24, 32, 3)[12, 16], [17, 23, 41])
+        assert list(infos[-1].k) == [20., 0., 16., 0., 20., 12., 0., 0., 1.]
+        assert not any(infos[-1].d)
         assert tf_matrix(buffer.lookup_transform('world', 'base_link', Time()).transform)[0, 3] == 1.2
         for topic in ('/flyco/odom', '/fmu/in/vehicle_visual_odometry'):
             assert {entry.node_name for entry in fake.get_publishers_info_by_topic(topic)} == {'generic_odometry_node'}

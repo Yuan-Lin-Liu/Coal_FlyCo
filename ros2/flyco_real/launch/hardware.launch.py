@@ -26,21 +26,36 @@ def build(context):
     if role == 'ground':
         return [IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share / 'launch/native.launch.py')),
                 launch_arguments={**common, 'role': 'ground'}.items())]
-    _, run, params = prepare_parameters(get_package_share_directory('flyco_ros2'),
+    params, run, params_file = prepare_parameters(get_package_share_directory('flyco_ros2'),
         Path(get_package_prefix('flyco_ros2')) / 'lib/flyco_ros2', config, common['runtime_root'])
     odin_share = Path(get_package_share_directory('odin_ros_driver'))
     control = yaml.safe_load((odin_share / 'config/control_command.yaml').read_text())
     control['register_keys'].update(settings.get('odin', {}).get('register_keys', {}))
     # Use Odin's native odom/IMU/LiDAR/camera TF instead of a second extrinsics node.
     control['register_keys']['send_odom_baselink_tf'] = 1
+    # The unmodified SDK's mode 2 requires PTP. Use its existing host-time
+    # option for the ROS/PX4 chain, and rectify native RGB in our bridge.
+    control['register_keys'].update(use_host_ros_time=1, sendrgbundistort=0)
     control_file = run / 'odin_control.yaml'
     control_file.write_text(yaml.safe_dump(control, sort_keys=False))
     calibration = run / 'odin'
     calibration.mkdir()
-    actions = [SetEnvironmentVariable('ODIN_CALIB_DIR', str(calibration)),
-               SetEnvironmentVariable('ODIN_COMMAND_FILE', str(calibration / 'command.txt'))]
+    owns_driver = LaunchConfiguration('start_driver').perform(context).lower() == 'true'
+    sensor_extra = {'odin_calibration_file': str(calibration / 'calib.yaml')} if owns_driver else {}
+    actions = [SetEnvironmentVariable('ODIN_CALIB_DIR', str(calibration))] if owns_driver else []
     critical = []
-    if LaunchConfiguration('start_driver').perform(context).lower() == 'true':
+    perception = params.get('perception_bridge', {})
+    camera_tf = Node(
+        package='flyco_real', executable='zero_camera_tf.py', name='odin_camera_tf',
+        parameters=[{
+            'parent_frame': perception.get('body_frame', 'base_link'),
+            'child_frame': perception.get('camera_optical_frame', 'camera_0'),
+            'translation': [0.0, 0.0, 0.0],
+            'rpy': [0.0, 0.0, 0.0],
+        }], output='screen')
+    actions.append(camera_tf)
+    critical.append(camera_tf)
+    if owns_driver:
         driver = Node(package='odin_ros_driver', executable='host_sdk_sample', name='odin_driver',
                       parameters=[{'config_file': str(control_file)}], output='screen')
         actions.append(driver)
@@ -48,11 +63,11 @@ def build(context):
     if role == 'sensors':
         odometry = Node(package='ros2_px4_odometry', executable='odom_to_px4_node',
                         name='generic_odometry_node', parameters=[
-                            LaunchConfiguration('odometry_config').perform(context), str(params)], output='screen')
+                            LaunchConfiguration('odometry_config').perform(context), str(params_file)], output='screen')
         actions.append(odometry)
         critical.append(odometry)
         sensor = Node(package='flyco_real', executable='perception_bridge.py', name='perception_bridge',
-                      parameters=[str(params)], output='screen')
+                      parameters=[str(params_file), sensor_extra], output='screen')
         actions.append(sensor)
         critical.append(sensor)
         actions.append(Node(package='flyco_real', executable='camera_fov.py', output='screen'))
@@ -60,6 +75,7 @@ def build(context):
         actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share / 'launch/native.launch.py')),
             launch_arguments={**common, 'role': 'onboard', 'runtime_root': str(run / 'algorithm'),
                               'odometry_config': LaunchConfiguration('odometry_config').perform(context),
+                              'odin_calibration_file': sensor_extra.get('odin_calibration_file', ''),
                               'start_mode': LaunchConfiguration('start_mode').perform(context)}.items()))
     for process in critical:
         actions.append(RegisterEventHandler(OnProcessExit(target_action=process,

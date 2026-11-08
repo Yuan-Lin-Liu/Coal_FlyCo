@@ -90,7 +90,6 @@ double get_ptp_smoothed_offset();
     #include <std_msgs/msg/header.hpp>
     #include <visualization_msgs/msg/marker_array.hpp>
     #include "sensor_msgs/msg/image.hpp"
-    #include <sensor_msgs/msg/camera_info.hpp>
     #include "sensor_msgs/msg/imu.hpp"
     #include "sensor_msgs/msg/point_cloud2.hpp"
     #include "sensor_msgs/point_cloud2_iterator.hpp"
@@ -840,7 +839,6 @@ void publishRgb(capture_Image_List_t *stream) {
     #else
         cv_image.header.stamp = make_aligned_stamp(stream->imageList[0].timestamp);
     #endif
-    cv_image.header.frame_id = "odin_camera_optical_frame";
     cv_image.encoding = "bgr8";
     cv_image.image = decoded_image;
 
@@ -874,13 +872,6 @@ void publishRgb(capture_Image_List_t *stream) {
     cv::Mat undistorted_image = cv::Mat::zeros(decoded_image.size(), decoded_image.type());
     cv_bridge::CvImage cv_undistorted_image;
 
-    if (m_undistort_map_init_success && decoded_image.size() != m_undistort_map_x.size()) {
-#ifdef ROS2
-        RCLCPP_ERROR_THROTTLE(node_->get_logger(), *node_->get_clock(), 5000,
-            "RGB dimensions differ from device calibration; configure a calibrated RGB mode");
-#endif
-        return;
-    }
     if (m_undistort_map_init_success) {
         cv::remap(decoded_image, undistorted_image, m_undistort_map_x, m_undistort_map_y, cv::INTER_LINEAR);
         #ifdef ROS2
@@ -888,7 +879,6 @@ void publishRgb(capture_Image_List_t *stream) {
         #else
             cv_undistorted_image.header.stamp = make_aligned_stamp(stream->imageList[0].timestamp);
         #endif
-        cv_undistorted_image.header.frame_id = "odin_camera_optical_frame";
         cv_undistorted_image.encoding = "bgr8";
         cv_undistorted_image.image = undistorted_image;
     }
@@ -898,24 +888,11 @@ void publishRgb(capture_Image_List_t *stream) {
         rgb_pub_->publish(*cv_image.toImageMsg());
         if (m_undistort_map_init_success) {
             undistort_rgb_pub_->publish(*cv_undistorted_image.toImageMsg());
-            // The polynomial lens has already been rectified to a zero-skew
-            // pinhole image. Never label its original coefficients as OpenCV D.
-            sensor_msgs::msg::CameraInfo info;
-            info.header = cv_undistorted_image.header;
-            info.width = undistorted_image.cols;
-            info.height = undistorted_image.rows;
-            info.distortion_model = "plumb_bob";
-            info.d = {0., 0., 0., 0., 0.};
-            info.k = {m_cam->fx(), 0., m_cam->cx(), 0., m_cam->fy(), m_cam->cy(), 0., 0., 1.};
-            info.r = {1., 0., 0., 0., 1., 0., 0., 0., 1.};
-            info.p = {m_cam->fx(), 0., m_cam->cx(), 0., 0., m_cam->fy(), m_cam->cy(), 0., 0., 0., 1., 0.};
-            rectified_info_pub_->publish(info);
         }
 
         // Compressed image: MJPEG uses original JPEG data; NV12 publishes raw NV12 bytes
         sensor_msgs::msg::CompressedImage compressed_msg;
-        compressed_msg.header.stamp = cv_image.header.stamp;
-        compressed_msg.header.frame_id = cv_image.header.frame_id;
+        compressed_msg.header.stamp = make_aligned_stamp(stream->imageList[0].timestamp, node_);
         if (image.format == LIDAR_RGB_FMT_NV12) {
             compressed_msg.format = "nv12";
         } else {
@@ -1844,7 +1821,7 @@ void publishRgb(capture_Image_List_t *stream) {
                 double y_norm = (v_out - m_cam->cy()) / m_cam->fy();
 
                 // remove skew
-                // Output K has zero skew; original lens skew is applied by world2cam().
+                x_norm = x_norm - y_norm * m_cam->skew() / m_cam->fx();
 
                 Eigen::Vector2d uv(x_norm, y_norm);
                 Eigen::Vector2d distorted_pixel = m_cam->world2cam(uv);
@@ -1903,10 +1880,7 @@ private:
 
     CameraParams m_camera_params;
     std::unique_ptr<mini_vikit::PolynomialCamera> m_cam;
-#ifdef ROS2
-    rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr rectified_info_pub_;
-#endif
-    bool m_cam_init_success = false;
+    bool m_cam_init_success;
     bool m_undistort_map_init_success = false;
     cv::Mat m_undistort_map_x;
     cv::Mat m_undistort_map_y;
@@ -1946,18 +1920,17 @@ private:
     void initialize_publishers() {
         #ifdef ROS2
             // Small data with queue depth 1
-            auto qos_small = rclcpp::QoS(5)
-                                    .reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT)
+            auto qos_small = rclcpp::QoS(4000)
+                                    .reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE)
                                     .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
 
             // Large sensor data with larger queue to avoid blocking
             auto qos_sensor = rclcpp::QoS(5)
-                                    .reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT)
+                                    .reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE)
                                     .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
 
             imu_pub_ = node_->create_publisher<ros::Imu>("odin1/imu", qos_small);
             rgb_pub_ = node_->create_publisher<ros::Image>("odin1/image", qos_sensor);
-            rectified_info_pub_ = node_->create_publisher<sensor_msgs::msg::CameraInfo>("odin1/camera_info", qos_sensor);
             cloud_pub_ = node_->create_publisher<ros::PointCloud2>("odin1/cloud_raw", qos_sensor);
             xyzrgbacloud_pub_ = node_->create_publisher<ros::PointCloud2>("odin1/cloud_slam", qos_sensor);
             odom_publisher_ = node_->create_publisher<ros::Odometry>("odin1/odometry", qos_sensor);
@@ -1968,7 +1941,7 @@ private:
             compressed_rgb_pub_ = node_->create_publisher<sensor_msgs::msg::CompressedImage>("odin1/image/compressed", qos_sensor);
             undistort_rgb_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("odin1/image/undistorted", qos_sensor);
             intensity_gray_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("odin1/image/intensity_gray", qos_sensor);
-            wiwc_publisher_ = node_->create_publisher<ros::Odometry>("odin1/wiwc", rclcpp::QoS(1).reliable().transient_local());
+            wiwc_publisher_ = node_->create_publisher<ros::Odometry>("odin1/wiwc", qos_sensor);
             tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(node_);
         #endif
     }

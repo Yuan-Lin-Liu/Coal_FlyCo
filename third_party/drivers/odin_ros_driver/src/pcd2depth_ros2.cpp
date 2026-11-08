@@ -18,9 +18,9 @@ limitations under the License.
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <ament_index_cpp/get_package_share_directory.hpp>
 #include "depth_image_ros2_node.hpp"
 #include "odin_calib_path.h"
+#include <rcpputils/filesystem_helper.hpp>
 bool fileExists(const std::string& filename) {
     struct stat buffer;
     return (stat(filename.c_str(), &buffer) == 0);
@@ -119,6 +119,24 @@ bool loadCalibParameters(std::shared_ptr<rclcpp::Node> node, const std::string& 
         return false;
     }
 }
+std::string get_package_source_directory() {
+    // 使用 rcpputils::fs::path 替代 std::filesystem::path
+    rcpputils::fs::path current_file(__FILE__);
+    
+    // 回溯到包根目录
+    auto path = current_file.parent_path();
+    
+    // 使用 rcpputils::fs::exists 替代 std::filesystem::exists
+    while (!path.empty() && !rcpputils::fs::exists(path / "package.xml")) {
+        path = path.parent_path();
+    }
+    
+    if (path.empty()) {
+        throw std::runtime_error("Failed to locate package root directory");
+    }
+    
+    return path.string();
+}
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
@@ -126,11 +144,10 @@ int main(int argc, char **argv)
 
     auto node = std::make_shared<rclcpp::Node>("pcd2depth_node");
     RCLCPP_INFO(node->get_logger(), "Node created");
-    const std::string default_config_file =
-        ament_index_cpp::get_package_share_directory("odin_ros_driver") +
-        "/config/control_command.yaml";
-    const std::string config_file = node->declare_parameter<std::string>(
-        "config_file", default_config_file);
+    std::string package_path = get_package_source_directory();
+    RCLCPP_INFO(node->get_logger(), "Package path: %s", package_path.c_str());
+    
+    std::string config_file = package_path + "/config/control_command.yaml";
     RCLCPP_INFO(node->get_logger(), "Loading config from: %s", config_file.c_str());
 
     YAML::Node config = YAML::LoadFile(config_file);

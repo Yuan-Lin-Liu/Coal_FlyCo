@@ -220,7 +220,7 @@ command -v MicroXRCEAgent
 
 ### 4.5 准备语义模型服务
 
-这是当前仓库尚未完成 Orin 验收的部分。`setup_linux.sh` 固定 Python 3.12、Torch 2.7.1、torchvision 0.22.1/cu128；桌面镜像也采用该组合。不要直接在 Jetson 上运行它并期待获得可用的 GPU 环境。模型服务与 ROS Python 3.10 通过 HTTP 隔离，可以使用另一个 Python 环境，但 Torch、torchvision、CUDA 和 Python ABI 必须同时匹配。
+语义服务可以运行在 Orin，也可以运行在地面电脑。推荐先让有完整 NVIDIA GPU 环境的地面电脑运行 SAM2，Orin 通过 HTTP 发送图像和文本并接收 mask。模型服务与 ROS Python 3.10 通过 HTTP 隔离，可以使用独立 Python 环境，但 Torch、torchvision、CUDA 和 Python ABI 必须匹配。
 
 先按板卡实际 JetPack，使用 [NVIDIA Jetson PyTorch 安装与兼容说明](https://docs.nvidia.com/deeplearning/frameworks/install-pytorch-jetson-platform/) 选择环境。这里不指定未知的 wheel URL。当前模型依赖以 Python 3.12 为基线；若 JetPack 对应的现成 wheel 只有 cp310，不能将其安装进 Python 3.12，需另做受支持环境或源码构建适配。这是完整机载感知部署的前置条件。
 
@@ -237,6 +237,51 @@ cd third_party/SAM_AD_Perception
 ```
 
 `doctor` 同时检查 CUDA tensor、torchvision GPU NMS 和模型资产完整性。仍需在第 8 节发送真实目标文字，验证端到端推理与时延。权重及锁定的上游源码可以从远程已验证机器按原路径复制，Python 虚拟环境及二进制扩展需要针对本机建立。
+
+#### 地面电脑运行 SAM2，Orin 远程调用
+
+Ubuntu 22.04 默认没有 Python 3.12。地面电脑先安装并创建语义环境：
+
+```bash
+sudo apt update
+sudo apt install -y software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install -y python3.12 python3.12-venv python3.12-dev
+
+cd "$HOME/Coal_FlyCo/third_party/SAM_AD_Perception"
+export SAM_AD_PYTHON=python3.12
+bash setup_linux.sh A
+```
+
+地面电脑启动可被局域网访问的服务。先用 `ip -br -4 addr` 查出地面电脑在本机网段的地址：
+
+```bash
+cd "$HOME/Coal_FlyCo"
+ros2 launch flyco_real semantic.launch.py \
+  bind:=0.0.0.0 \
+  python:="$HOME/Coal_FlyCo/third_party/SAM_AD_Perception/.venv/bin/python"
+```
+
+服务就绪后，在 Orin 上验证（将 `GROUND_IP` 换成地面电脑 IP）：
+
+```bash
+curl --noproxy "*" -sS "http://${GROUND_IP}:8851/health"
+```
+
+Orin 的跟踪入口通过启动参数指定远程服务，不需要在 Orin 再启动一份语义服务：
+
+```bash
+ros2 launch flyco_real native.launch.py \
+  role:=onboard \
+  config:="$PWD/config/vehicle.odin.local.yaml" \
+  start_sensors:=false \
+  start_mode:=false \
+  segmentation_endpoint:="http://${GROUND_IP}:8851" \
+  segmentation_timeout:=15.0
+```
+
+这里的 `GROUND_IP` 是地面电脑地址，不能写 Orin 自己的 `127.0.0.1`。`semantic.launch.py` 的 `bind` 参数和 `native.launch.py` 的远程 endpoint/timeout 参数由 `flyco_real` 提供；无需修改 HTTP provider。完整飞行入口使用同样的 `segmentation_endpoint` 和 `segmentation_timeout` 参数，并设置 `start_semantic:=false`。
 
 ## 5. 地面电脑首次部署
 
@@ -445,15 +490,21 @@ ros2 launch flyco_real agent.launch.py transport:=udp4 port:=8888
 ros2 launch flyco_real odin.launch.py config:="$PWD/config/vehicle.odin.local.yaml"
 ```
 
-该入口已经包含 sensor_bridge 和相机视锥。不要再启动会重复创建这些节点的组合入口。先确认 `/flyco/odom` 以及 PX4 的本地位置估计正常。
+该入口已经包含传感器桥、相机视锥和零偏 `base_link -> camera_0` TF。不要再启动会重复创建这些节点的组合入口。先确认 `/flyco/odom` 以及 PX4 的本地位置估计正常。
 
-### 8.3 Orin C：语义推理服务
+### 8.3 语义推理服务
 
 使用第 4.5 节准备好的实际解释器：
 
 ```bash
 ros2 launch flyco_real semantic.launch.py \
   python:=/absolute/path/to/jetson-semantic-env/bin/python
+```
+
+如果选择地面电脑推理，按照第 4.5 节的远程方案在地面电脑启动 `bind:=0.0.0.0`，Orin 不启动本节服务，而是在 `native.launch.py` 或 `flyco.launch.py` 中传入：
+
+```bash
+segmentation_endpoint:=http://GROUND_IP:8851 segmentation_timeout:=15.0
 ```
 
 另一个 Orin 终端检查就绪：
@@ -480,7 +531,7 @@ ros2 launch flyco_real ground.launch.py \
 
 上述 CUDA 路径对应第 5 节的一键安装脚本；如使用自行安装的完整 CUDA，则将 `cuda_home` 改为实际目录。也可以省略该参数，由启动文件在配置路径不可用时查找项目内 CUDA。不要传入不存在的 `/usr/local/cuda-11.8`。
 
-此终端会发布 `/flyco/ground/heartbeat`，运行期间保持开启。另起 QGC 并接入真机。该入口默认不在地面启动语义服务，机载配置的 HTTP 地址仍指向 Orin 自身。
+此终端会发布 `/flyco/ground/heartbeat`，运行期间保持开启。另起 QGC 并接入真机。地面电脑运行 SAM2 时，地面预测入口仍使用 `start_semantic:=false`；语义请求由 Orin 的跟踪节点经 HTTP 发往地面电脑。
 
 **地面 B：独立 UI 与文字发送节点**，在已加载 ROS2 与工程环境的新终端执行：
 

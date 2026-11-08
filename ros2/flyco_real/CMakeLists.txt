@@ -4,7 +4,8 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS scripts/px4_bridge.py scripts/perception_bridge.py scripts/tracking_tf.py
-  scripts/task.py scripts/mission.py scripts/camera_fov.py scripts/check_semantic.py DESTINATION lib/${PROJECT_NAME})
+  scripts/task.py scripts/mission.py scripts/camera_fov.py scripts/check_semantic.py
+  scripts/zero_camera_tf.py DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 install(CODE "file(REMOVE \"\${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}/sensor_bridge.py\")")
 if(BUILD_TESTING)

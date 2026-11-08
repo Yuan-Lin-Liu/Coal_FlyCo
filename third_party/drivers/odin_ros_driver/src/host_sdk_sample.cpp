@@ -866,6 +866,23 @@ std::string get_package_share_path(const std::string& package_name) {
 #endif
 }
 
+std::string get_package_source_directory() {
+    // 获取当前源文件的绝对路径
+    std::filesystem::path current_file(__FILE__);
+    
+    // 回溯到包根目录（包含package.xml的目录）
+    auto path = current_file.parent_path();
+    while (!path.empty() && !std::filesystem::exists(path / "package.xml")) {
+        path = path.parent_path();
+    }
+    
+    if (path.empty()) {
+        throw std::runtime_error("Failed to locate package root directory");
+    }
+    
+    return path.string();
+}
+
 std::string get_package_path(const std::string& package_name) {
     #ifdef ROS2
         return ament_index_cpp::get_package_share_directory(package_name);
@@ -1306,6 +1323,7 @@ static void lidar_device_callback(const lidar_device_info_t* device, bool attach
             #endif
 
             g_usb_version_error = true;
+            system("pkill -f rviz");
             exit(1);
             return;
         }
@@ -1413,6 +1431,8 @@ static void lidar_device_callback(const lidar_device_info_t* device, bool attach
             #else
                 ROS_ERROR("Failed to get device firmware version, potential incompatible, please upgrade device firmware and retry.");
             #endif
+            system("pkill -f rviz");
+            system("pkill -f host_sdk_sample");
             exit(1);
         }
         else {
@@ -1450,6 +1470,8 @@ static void lidar_device_callback(const lidar_device_info_t* device, bool attach
                 #else
                     ROS_ERROR("The soc version is too low, please upgrade the device firmware to at least %d.%d.%d\n",required_firmware_version_major,required_firmware_version_minor,required_firmware_version_patch);
                 #endif
+                system("pkill -f rviz");
+                system("pkill -f host_sdk_sample");
                 exit(1);
             }
         }
@@ -1504,6 +1526,7 @@ static void lidar_device_callback(const lidar_device_info_t* device, bool attach
                 #else
                     ROS_WARN("Device state: streaming, this should not happen, exitting...");
                 #endif
+                system("pkill -f rviz");
                 exit(1);
                 break;
             case LIDAR_DEVICE_STREAM_STOPPED:
@@ -1581,9 +1604,28 @@ static void lidar_device_callback(const lidar_device_info_t* device, bool attach
             #endif
         }
 
-        // Keep device calibration in the per-run ODIN_CALIB_DIR only.
-        // Installed source/resources must remain immutable across sessions.
-
+        // Always mirror the primary calib to the package config dir as a backup,
+        // regardless of whether it was freshly fetched or reused (resume case).
+        if (std::filesystem::exists(calib_config)) {
+            try {
+                std::filesystem::create_directories(config_dir);
+                std::filesystem::path backup_path = std::filesystem::path(config_dir) / "calib.yaml";
+                std::filesystem::copy_file(calib_config, backup_path,
+                    std::filesystem::copy_options::overwrite_existing);
+                #ifdef ROS2
+                    RCLCPP_INFO(rclcpp::get_logger("device_cb"), "========== [CALIB] BACKUP -> %s ==========", backup_path.string().c_str());
+                #else
+                    ROS_INFO("========== [CALIB] BACKUP -> %s ==========", backup_path.string().c_str());
+                #endif
+            } catch (const std::exception& e) {
+                #ifdef ROS2
+                    RCLCPP_WARN(rclcpp::get_logger("device_cb"), "Failed to save calibration backup to config dir: %s", e.what());
+                #else
+                    ROS_WARN("Failed to save calibration backup to config dir: %s", e.what());
+                #endif
+            }
+        }
+        
         // Push device identity / version into the binary data logger's info.txt.
         // SN is parsed from the first comment line of calib.yaml (e.g. "# O1-P010100043").
         // No-op when recorddata=0 (logger not initialized).
@@ -2445,19 +2487,17 @@ int main(int argc, char *argv[])
     signal(SIGTERM, signal_handler);
 
     try {
-        std::string package_path = get_package_share_path("odin_ros_driver");
+    #ifdef ROS2
+        std::string package_path = get_package_source_directory();
+        std::cout << "package_path: " << package_path << std::endl;
+    #else
+    	std::string package_path = get_package_share_path("odin_ros_driver");
+    #endif
         std::string config_dir = package_path + "/config";
         std::string config_file = config_dir + "/control_command.yaml";
 
-    #ifdef ROS2
-        config_file = node->declare_parameter<std::string>("config_file", config_file);
-    #endif
-        std::cout << "config_file: " << config_file << std::endl;
-
         // Initialize command file path to /tmp/odin_command.txt
-        const char* command_file = std::getenv("ODIN_COMMAND_FILE");
-        g_command_file_path = command_file ? command_file :
-            odin_ros_driver::GetOdinRuntimeDir() + "/command.txt";
+        g_command_file_path = "/tmp/odin_command.txt";
 
         #ifdef ROS2
             RCLCPP_INFO(rclcpp::get_logger("init"), "Command file path set to: %s", g_command_file_path.c_str());

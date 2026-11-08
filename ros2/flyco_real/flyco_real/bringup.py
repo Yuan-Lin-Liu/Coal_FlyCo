@@ -66,7 +66,8 @@ def prepare_parameters(flyco_share, libexec, hardware_file, runtime_root):
         # Odin's IMU origin is the vehicle origin: no mounting TF or lever arm.
         # Normalize older local profiles too, without rewriting vehicle settings.
         perception.update(
-            input_camera_frame='odin_camera_optical_frame',
+            odin_native_driver=True, image_topic='/odin1/image',
+            image_is_rectified=False, input_camera_frame='',
             camera_optical_frame='camera_0')
     # Obsolete MAVROS endpoint keys must not redirect the native DDS provider.
     params['px4_bridge'].pop('mavros_ns', None)

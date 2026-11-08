@@ -10,10 +10,10 @@ deployment:
   px4_topic_prefix: /fmu
 odin:
   register_keys:
-    use_host_ros_time: 2
+    use_host_ros_time: 1
     custom_map_mode: 0
     sendrgb: 1
-    sendrgbundistort: 1
+    sendrgbundistort: 0
     sendrgbcompressed: 0
     sendimu: 1
     sendodom: 1
@@ -32,15 +32,16 @@ perception_bridge:
   ros__parameters:
     use_sim_time: false
     cloud_topic: /odin1/cloud_slam
-    image_topic: /odin1/image/undistorted
+    odin_native_driver: true
+    image_topic: /odin1/image
     camera_info_topic: /odin1/camera_info
-    image_is_rectified: true
+    image_is_rectified: false
     lio_parent_frame: odom
     world_frame: world
     body_frame: base_link
-    # Native Odin camera_0 TF is optical; the driver image header uses another name.
+    # Native Odin camera_0 TF is optical; raw image headers have no frame ID.
     camera_optical_frame: camera_0
-    input_camera_frame: odin_camera_optical_frame
+    input_camera_frame: ''
     world_from_lio_translation:
     - 0.0
     - 0.0

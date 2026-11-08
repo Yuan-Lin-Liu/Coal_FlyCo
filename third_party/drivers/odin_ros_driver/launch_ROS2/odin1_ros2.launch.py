@@ -44,7 +44,7 @@ def generate_launch_description():
         default_value=os.path.join(package_dir, 'config', 'odin_ros2.rviz'),
         description='Path to RViz2 config file'
     )
-
+    
     # Create main node
     host_sdk_node = Node(
         package='odin_ros_driver',
@@ -61,7 +61,6 @@ def generate_launch_description():
     with open(pcd2depth_config_path, 'r') as f:
         pcd2depth_params = yaml.safe_load(f) 
     pcd2depth_params['calib_file_path'] = calib_file_path 
-    pcd2depth_params['config_file'] = LaunchConfiguration('config_file')
     pcd2depth_node = Node(
         package='odin_ros_driver',
         executable='pcd2depth_ros2_node',  
@@ -75,7 +74,6 @@ def generate_launch_description():
     with open(reprojection_config_path, 'r') as f:
         reprojection_params = yaml.safe_load(f) 
     reprojection_params['calib_file_path'] = calib_file_path 
-    reprojection_params['config_file'] = LaunchConfiguration('config_file')
     cloud_reprojection_node = Node(
         package='odin_ros_driver',
         executable='cloud_reprojection_ros2_node',  
@@ -113,6 +111,6 @@ def generate_launch_description():
     ld.add_action(pcd2depth_node)
     ld.add_action(cloud_reprojection_node)
     ld.add_action(image_overlay_node)
-    # ld.add_action(rviz_node)  # Add RViz node
+    ld.add_action(rviz_node)  # Add RViz node
     
     return ld

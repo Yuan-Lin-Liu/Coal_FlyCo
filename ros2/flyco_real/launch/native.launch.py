@@ -31,6 +31,16 @@ def build(context):
     specs = {s['name']: s for s in specs}
     actions, critical = [], []
     python = LaunchConfiguration('python_executable').perform(context)
+    semantic_endpoint = LaunchConfiguration('segmentation_endpoint').perform(context).strip()
+    semantic_timeout = LaunchConfiguration('segmentation_timeout').perform(context).strip()
+    tracking_extra = {}
+    if semantic_endpoint:
+        tracking_extra['segmentation_endpoint'] = semantic_endpoint
+    if semantic_timeout:
+        timeout = float(semantic_timeout)
+        if timeout <= 0.0:
+            raise ValueError('segmentation_timeout must be positive')
+        tracking_extra['segmentation_timeout'] = timeout
     def node(package, executable, name, remappings=(), extra=None):
         action = Node(package=package, executable=executable, name=name,
                       parameters=[str(config), extra or {}], remappings=list(remappings), output='screen',
@@ -48,7 +58,9 @@ def build(context):
                 parameters=[LaunchConfiguration('odometry_config').perform(context), str(config)], output='screen')
             actions.append(odometry)
             critical.append(odometry)
-            node('flyco_real', 'perception_bridge.py', 'perception_bridge')
+            calibration = LaunchConfiguration('odin_calibration_file').perform(context)
+            node('flyco_real', 'perception_bridge.py', 'perception_bridge',
+                 extra={'odin_calibration_file': calibration} if calibration else {})
             fov = node('flyco_real', 'camera_fov.py', 'camera_fov')
             critical.remove(fov)
         if LaunchConfiguration('start_mode').perform(context).lower() == 'true':
@@ -58,7 +70,7 @@ def build(context):
         flyco('flyco_planner')
         flyco('traj_server')
         flyco('sam_tracking_node')
-        node('flyco_real', 'tracking_tf.py', 'sam_tracking')
+        node('flyco_real', 'tracking_tf.py', 'sam_tracking', extra=tracking_extra or None)
         flyco('tracking_prompt')
     else:
         flyco('mesh_predict_node')
@@ -77,9 +89,14 @@ def generate_launch_description():
         DeclareLaunchArgument('config', default_value=str(share / 'config/hardware.yaml')),
         DeclareLaunchArgument('runtime_root', default_value=str(Path.home() / '.ros/coal-flyco')),
         DeclareLaunchArgument('start_sensors', default_value='true'),
+        DeclareLaunchArgument('odin_calibration_file', default_value=''),
         DeclareLaunchArgument('odometry_config', default_value=str(
             Path(get_package_share_directory('ros2_px4_odometry')) / 'config/odin_config.yaml')),
         DeclareLaunchArgument('start_mode', default_value='true'),
         DeclareLaunchArgument('python_executable', default_value=''),
+        DeclareLaunchArgument('segmentation_endpoint', default_value='',
+                              description='Override the HTTP semantic service endpoint for onboard tracking'),
+        DeclareLaunchArgument('segmentation_timeout', default_value='',
+                              description='Override the HTTP semantic request timeout in seconds'),
         OpaqueFunction(function=build),
     ])

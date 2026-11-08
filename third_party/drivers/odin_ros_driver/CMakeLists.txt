@@ -41,22 +41,22 @@ endif()
 
 message(STATUS "Build system: ${ROS_VERSION}")
 
-# Platform detection. CMAKE_SYSTEM_PROCESSOR describes the build target, while
-# uname reports the laptop architecture during cross-compilation.
-set(ARCH "${CMAKE_SYSTEM_PROCESSOR}")
-if(NOT ARCH)
-    set(ARCH "${CMAKE_HOST_SYSTEM_PROCESSOR}")
-endif()
-string(TOLOWER "${ARCH}" ARCH)
+# Platform detection
+execute_process(
+    COMMAND uname -m
+    OUTPUT_VARIABLE ARCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 
 if(ARCH STREQUAL "x86_64")
     set(TARGET_PLATFORM "x86")
     message(STATUS "Detected x86_64 architecture")
-elseif(ARCH MATCHES "^(arm64|aarch64)$")
+elseif(ARCH MATCHES "arm|aarch64")
     set(TARGET_PLATFORM "arm")
     message(STATUS "Detected ARM architecture: ${ARCH}")
 else()
-    message(FATAL_ERROR "Odin SDK supports x86_64 and aarch64/arm64, got: ${ARCH}")
+    message(WARNING "Unsupported architecture: ${ARCH}. Using default settings")
+    set(TARGET_PLATFORM "unknown")
 endif()
 
 # Set library path
@@ -104,7 +104,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 # unwind-table flags keep the stack walkable, and CMAKE_ENABLE_EXPORTS adds
 # -rdynamic so symbols pulled in from the static SDK archive land in .dynsym
 # and become visible to dladdr()/backtrace_symbols() at runtime.
-option(ODIN_ENABLE_BACKTRACE "Keep symbols and frame pointers for crash backtraces" OFF)
+option(ODIN_ENABLE_BACKTRACE "Keep symbols and frame pointers for crash backtraces" ON)
 if(ODIN_ENABLE_BACKTRACE)
     set(BACKTRACE_FLAGS "-g -fno-omit-frame-pointer -funwind-tables -fasynchronous-unwind-tables")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${BACKTRACE_FLAGS}")
@@ -114,16 +114,13 @@ if(ODIN_ENABLE_BACKTRACE)
 endif()
 
 # Find common dependencies
+find_package(PkgConfig REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(PCL REQUIRED COMPONENTS common)
+find_package(PCL REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(OpenSSL REQUIRED)
-
-# Ubuntu's PCL package provides Findlibusb.cmake. It first tries pkg-config and
-# then falls back to CMake's sysroot-aware find_path/find_library logic.
-list(APPEND CMAKE_MODULE_PATH "${PCL_DIR}/Modules")
-find_package(libusb REQUIRED)
+pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 
 # Shared include directories
 include_directories(
@@ -132,6 +129,7 @@ include_directories(
     ${OpenCV_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
     ${yaml-cpp_INCLUDE_DIR}
+    ${LIBUSB_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
@@ -141,11 +139,11 @@ set(COMMON_LIBS
     ${PCL_LIBRARIES}
     ${yaml-cpp_LIBRARIES}
     ${OPENSSL_LIBRARIES}
+    ${LIBUSB_LIBRARIES}
     pthread
     rt
     ${CMAKE_DL_LIBS}
     ${LYD_HOST_API_LIB}
-    libusb::libusb
 )
 
 # ===== ROS1 Configuration =====
@@ -202,9 +200,11 @@ if(ROS_VERSION STREQUAL "ROS1")
         ${catkin_LIBRARIES}
         ${COMMON_LIBS}
 	${LYD_HOST_API_LIB}
+    	${LIBUSB_LIBRARIES}
     	yaml-cpp
     	${OpenCV_LIBS}
     	pthread  
+        usb-1.0
     )
     # Make sure the AE/AWB srv headers are generated before host_sdk_sample
     # is compiled (catkin's generate_messages produces this target).
@@ -312,6 +312,7 @@ elseif(ROS_VERSION STREQUAL "ROS2")
     target_link_libraries(host_sdk_sample
         ${COMMON_LIBS}
         yaml-cpp
+        usb-1.0
     )
 
     # Link the generated AE/AWB srv typesupport into host_sdk_sample so it
@@ -336,8 +337,6 @@ elseif(ROS_VERSION STREQUAL "ROS2")
         ament_index_cpp
     )
     
-    option(ODIN_BUILD_EXTRAS "Build depth/reprojection/overlay visualization nodes" OFF)
-    if(ODIN_BUILD_EXTRAS)
     add_library(pointcloud_depth_converter_ros2 src/pointcloud_depth_converter.cpp)
     target_link_libraries(pointcloud_depth_converter_ros2
         ${OpenCV_LIBS}
@@ -377,7 +376,6 @@ elseif(ROS_VERSION STREQUAL "ROS2")
         image_transport
         pcl_conversions
         message_filters
-        ament_index_cpp
     )
 
     add_library(cloud_reprojector_ros2 src/cloud_reprojector.cpp)
@@ -403,7 +401,6 @@ elseif(ROS_VERSION STREQUAL "ROS2")
         image_transport
         pcl_conversions
         message_filters
-        ament_index_cpp
     )
 
     add_executable(image_overlay_node src/image_overlay_node.cpp)
@@ -419,18 +416,21 @@ elseif(ROS_VERSION STREQUAL "ROS2")
         message_filters
     )
 
-    endif()
-
     # Installation rules - ensure all install targets are defined before ament_package()
     # Install executable
-    set(ODIN_INSTALL_TARGETS host_sdk_sample)
-    if(ODIN_BUILD_EXTRAS)
-        list(APPEND ODIN_INSTALL_TARGETS pcd2depth_ros2_node
-            cloud_reprojection_ros2_node image_overlay_node
-            depth_image_ros2_node_lib pointcloud_depth_converter_ros2 cloud_reprojector_ros2)
-    endif()
-    install(TARGETS ${ODIN_INSTALL_TARGETS} EXPORT export_${PROJECT_NAME}
-        ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION lib/${PROJECT_NAME})
+    install(TARGETS 
+        host_sdk_sample 
+        pcd2depth_ros2_node
+        cloud_reprojection_ros2_node
+        image_overlay_node
+        depth_image_ros2_node_lib
+        pointcloud_depth_converter_ros2
+        cloud_reprojector_ros2
+        EXPORT export_${PROJECT_NAME}
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION lib/${PROJECT_NAME}
+    )
     
     # Install package.xml
     install(FILES package.xml
@@ -503,6 +503,6 @@ message(STATUS "Project: ${PROJECT_NAME}")
 message(STATUS "ROS_VERSION: ${ROS_VERSION}")
 message(STATUS "Target platform: ${TARGET_PLATFORM}")
 message(STATUS "lydHostApi library: ${LYD_HOST_API_LIB}")
-message(STATUS "libusb library: ${libusb_LIBRARIES}")
+message(STATUS "libusb library: ${LIBUSB_LIBRARIES}")
 message(STATUS "=======================================")
 

@@ -58,7 +58,10 @@ def test_legacy_odin_profile_uses_zero_mount_and_native_camera(tmp_path):
     assert 'sensor_bridge' not in params
     assert 'odometry_topic' not in params['generic_odometry_node']  # New forwarder YAML owns this.
     assert params['generic_odometry_node']['extrinsic_translation'] == [0., 0., 0.]
-    assert params['perception_bridge']['input_camera_frame'] == 'odin_camera_optical_frame'
+    assert params['perception_bridge']['input_camera_frame'] == ''
+    assert params['perception_bridge']['image_topic'] == '/odin1/image'
+    assert params['perception_bridge']['odin_native_driver']
+    assert not params['perception_bridge']['image_is_rectified']
     assert params['perception_bridge']['camera_optical_frame'] == 'camera_0'
     assert params['sam_tracking']['camera_optical_frame'] == 'camera_0'
     assert yaml.safe_load(path.read_text()) == profile
@@ -85,6 +88,8 @@ def test_odin_launch_keeps_driver_tf_with_legacy_control(tmp_path):
     assert executables == ['host_sdk_sample', 'odom_to_px4_node', 'perception_bridge.py', 'camera_fov.py']
     control, = (tmp_path / 'runtime').glob('native-*/odin_control.yaml')
     assert yaml.safe_load(control.read_text())['register_keys']['send_odom_baselink_tf'] == 1
+    assert yaml.safe_load(control.read_text())['register_keys']['sendrgbundistort'] == 0
+    assert yaml.safe_load(control.read_text())['register_keys']['use_host_ros_time'] == 1
 
 
 def test_http_remote_authorization_header():
