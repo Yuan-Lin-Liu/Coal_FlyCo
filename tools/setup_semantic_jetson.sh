@@ -6,6 +6,7 @@ project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 sam_root="$project_root/third_party/SAM_AD_Perception"
 sam_python="${SAM_AD_PYTHON:-/usr/bin/python3.10}"
 sam_cuda="${CUDA_HOME:-/usr/local/cuda-12.6}"
+sam_pip_index="${SAM_AD_PIP_INDEX_URL:-https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple}"
 
 if [[ "$(uname -m)" != aarch64 ]] || ! grep -Eq 'R36 .*REVISION: 4\.' /etc/nv_tegra_release 2>/dev/null; then
   echo 'This installer requires Jetson Linux R36.4 (ARM64).' >&2
@@ -43,9 +44,13 @@ requirements = requirements.replace('opencv-python==', 'opencv-python-headless==
     'torch==2.8.0\ntorchvision==0.23.0\nnumpy==1.26.4\n')
 PY
 
-"$model_python" -m pip install --index-url https://pypi.org/simple --upgrade pip setuptools wheel
+# Bootstrap without reusing a possibly truncated HTTP cache. New pip supports
+# retrying/resuming interrupted wheel downloads in the installation below.
+"$model_python" -m pip install --index-url "$sam_pip_index" \
+  --no-cache-dir --retries 10 --upgrade 'pip>=25.2,<27' setuptools wheel
 # Jetson AI Lab JP6/cu126 ARM64 builds. Hashes pin these exact CUDA packages.
-"$model_python" -m pip install --index-url https://pypi.org/simple \
+"$model_python" -m pip install --index-url "$sam_pip_index" \
+  --retries 10 --resume-retries 10 \
   --constraint "$sam_root/.venv/constraints-jetson.txt" \
   'https://pypi.jetson-ai-lab.io/jp6/cu126/+f/62a/1beee9f2f1470/torch-2.8.0-cp310-cp310-linux_aarch64.whl#sha256=62a1beee9f2f147076a974d2942c90060c12771c94740830327cae705b2595fc' \
   'https://pypi.jetson-ai-lab.io/jp6/cu126/+f/907/c4c1933789645/torchvision-0.23.0-cp310-cp310-linux_aarch64.whl#sha256=907c4c1933789645ebb20dd9181d40f8647978e6bd30086ae7b01febb937d2d1' \

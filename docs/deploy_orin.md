@@ -36,7 +36,10 @@ bash tools/setup_semantic_jetson.sh
 配对安装包，校验安装包哈希，在 `third_party/SAM_AD_Perception/.venv` 创建 Python 3.10
 环境并准备后端 A 的模型资产。Python 3.10 使用 scikit-image 0.25.2；推理服务采用
 headless OpenCV，UI 继续使用地面环境。桌面依赖清单保持原样。安装过程需要访问
-PyPI、Jetson AI Lab、GitHub 和模型资产下载源；已有有效资产会复用。
+清华 PyPI 镜像、Jetson AI Lab、GitHub 和模型资产下载源；已有有效资产会复用。
+普通 Python 包默认走清华镜像，可用 `SAM_AD_PIP_INDEX_URL` 指定其他索引。
+引导升级 pip 时绕过 HTTP 缓存，后续使用新版 pip 的下载重试与续传；所有哈希校验保留。
+若下载中断后提示哈希不一致，可更新代码后重跑同一安装命令，已有虚拟环境和有效资产会复用。
 
 安装完成后直接启动 `ros2 launch flyco_real semantic.launch.py`，由服务加载模型并完成
 GPU 预热。启动服务无需激活 `.venv`，也无需重新编译 ROS2 包。该 ARM64 安装路径已核对
