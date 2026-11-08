@@ -50,7 +50,6 @@ def build(context, state=None):
             if time.monotonic() > state.get('deadline', time.monotonic()+180.):
                 raise RuntimeError('Simulation sensor startup timed out')
             return [TimerAction(period=1., actions=[OpaqueFunction(function=build, kwargs={'state': state})])]
-        gate_params['session_dir'] = str(run)
         env = dict(FLYCO_ISAAC_RUNTIME=str(run), FLYCO_ISAAC_PORT=str(session['port']),
             FLYCO_ISAAC_DOMAIN=str(session['domain']), FLYCO_ISAAC_STACK_ROLE='algorithms',
             FLYCO_ISAAC_FLIGHT_CONTROLLER='px4-native', FLYCO_ISAAC_EXTERNAL_NATIVE_MODE='1',
@@ -80,7 +79,7 @@ def build(context, state=None):
         actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share/'launch/mode.launch.py')),
             launch_arguments={'simulation': str(simulation).lower(), 'config': arg('config')}.items()))
     gate = Node(package='flyco_real', executable='task.py', name='flyco_arming_gate',
-                arguments=['start-sim' if simulation and arg('auto_arm').lower() == 'true' else 'wait-armed'],
+                arguments=['wait-armed'],
                 parameters=[gate_params], output='screen')
     def after_arming(event, launch_context):
         if launch_context.is_shutdown:
@@ -105,7 +104,6 @@ def generate_launch_description():
         DeclareLaunchArgument('project_root', default_value=os.environ.get('COAL_FLYCO_ROOT', str(Path.cwd()))),
         DeclareLaunchArgument('session_dir', default_value=''),
         DeclareLaunchArgument('ui', default_value='true'),
-        DeclareLaunchArgument('auto_arm', default_value='true', description='Normal arming in simulation only'),
         DeclareLaunchArgument('scene', default_value='4'),
         DeclareLaunchArgument('domain', default_value='64'),
         DeclareLaunchArgument('px4_dir', default_value=os.environ.get('PX4_DIR', str(px4_dir))),

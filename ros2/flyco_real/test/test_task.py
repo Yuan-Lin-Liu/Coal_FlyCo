@@ -1,6 +1,7 @@
 """Exercise terminal tasks over ROS2, including normal arming and failure reporting."""
 import json
 import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -16,7 +17,7 @@ from sensor_msgs.msg import Joy
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from flyco_real.px4_dds import topic
-from flyco_real.task import CONTROL_ACTIONS, control_task, mode_task, planner_task, start_simulation_task
+from flyco_real.task import CONTROL_ACTIONS, control_task, mode_task, planner_task
 
 
 @pytest.fixture
@@ -122,9 +123,27 @@ def test_sim_task_uses_isaac_odometry_and_releases_joy(terminal):
     assert prompts[-1].data == '一个煤堆'
 
 
-def test_simulation_start_rejects_non_sitl_session(terminal, tmp_path):
-    _, client = terminal
-    (tmp_path/'session.json').write_text(json.dumps({'flight_controller': 'hardware'}))
-    client.declare_parameter('session_dir', str(tmp_path))
-    with pytest.raises(RuntimeError, match='active local PX4 SITL'):
-        start_simulation_task(client)
+def test_arming_gate_waits_for_operator_mode_and_arming_without_sending_commands(terminal):
+    server, client = terminal
+    state = dict(registered_mode_id=23, mode='FlyCo', armed=True, landed=None)
+    publisher = server.create_publisher(String, '/flyco/control/status',
+        QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+    received = []
+    for endpoint in ('vehicle_command', 'vehicle_command_mode_executor'):
+        server.create_subscription(VehicleCommand, topic('/task_test/fmu', 'in', endpoint, VehicleCommand),
+                                   received.append, qos_profile_sensor_data)
+    started = time.monotonic()
+    def publish():
+        elapsed = time.monotonic()-started
+        if elapsed >= .6:
+            state.update(mode='FlyCo', armed=True, landed=True)
+        elif elapsed >= .4:
+            state.update(mode='FlyCo', armed=False, landed=True)
+        elif elapsed >= .2:
+            state.update(mode='POSCTL', armed=True, landed=True)
+        publisher.publish(String(data=json.dumps(state)))
+    server.create_timer(.02, publish)
+    mode_task(client, 'wait-armed')
+    assert time.monotonic()-started >= .6
+    assert state['mode'] == 'FlyCo' and state['armed']
+    assert received == []

@@ -1,8 +1,6 @@
 """Terminal task nodes for FlyCo; registration belongs to the persistent mode node."""
 import argparse
 import json
-import os
-from pathlib import Path
 import time
 
 import rclpy
@@ -74,9 +72,10 @@ def mode_task(node, action):
     node.create_subscription(String, '/flyco/control/status', update,
                              QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
     if action == 'wait-armed':
-        print('Waiting for registered FlyCo mode to be normally armed before starting algorithms', flush=True)
+        print('Waiting for you to select FlyCo and arm in QGC, and for landed-state telemetry', flush=True)
         wait_for(node, lambda: status.get('registered_mode_id') is not None and
-                 status.get('mode') == 'FlyCo' and status.get('armed') is True,
+                 status.get('mode') == 'FlyCo' and status.get('armed') is True and
+                 status.get('landed') is not None,
                  float('inf'), 'FlyCo arming wait interrupted')
         print('FlyCo armed; starting algorithms', flush=True)
         return
@@ -102,7 +101,7 @@ def mode_task(node, action):
         executor = status.get('mode_executor_id')
         if executor is None:
             raise RuntimeError('FlyCo mode executor is not registered')
-        # Normal arming only (param2 stays zero); automatic calls require the SITL session guard.
+        # Normal arming only (param2 stays zero), requested explicitly by the operator.
         command = VehicleCommand(command=VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM,
             param1=1., source_component=VehicleCommand.COMPONENT_MODE_EXECUTOR_START+int(executor))
         endpoint = 'vehicle_command_mode_executor'
@@ -113,45 +112,6 @@ def mode_task(node, action):
     wait_for(node, lambda: time.monotonic()-last_rx[0] < 2. and expected(), 10.,
              action+' not confirmed; inspect PX4/QGC messages (no force or automatic retry)')
     print(action+': confirmed; mode='+str(status.get('mode'))+', armed='+str(status.get('armed')))
-
-
-def start_simulation_task(node):
-    """Normal engagement is automatic only for the identified local SITL session."""
-    session_dir = Path(node.get_parameter('session_dir').value)
-    session = json.loads((session_dir/'session.json').read_text())
-    px4 = session.get('px4', {})
-    pid = px4.get('pid')
-    expected = Path(session.get('px4_dir', ''))/'build/px4_sitl_default/bin/px4'
-    if (session.get('ended') or session.get('flight_controller') != 'px4-native' or not pid or
-            str(session.get('domain')) != os.environ.get('ROS_DOMAIN_ID', '0') or
-            Path(f'/proc/{pid}/exe').resolve() != expected.resolve() or
-            Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[19] != px4.get('birth')):
-        raise RuntimeError('Automatic arming requires the active local PX4 SITL session')
-    status = {}
-    node.create_subscription(String, '/flyco/control/status', lambda msg: status.update(json.loads(msg.data)),
-        QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
-    print('Waiting for SITL registration and localization before normal arming', flush=True)
-    wait_for(node, lambda: status.get('registered_mode_id') is not None and
-             all(status.get(k) for k in ('enabled', 'odom_ok', 'px4_ok', 'ground_ok')), 120.,
-             'SITL not ready for normal arming; inspect FlyCo status')
-    if status.get('armed'):
-        if status.get('mode') != 'FlyCo':
-            raise RuntimeError('Already armed outside FlyCo; refusing automatic mode takeover')
-        return
-    if status.get('landed') is not True:
-        raise RuntimeError('Normal automatic SITL arming requires a confirmed landed vehicle')
-    mode_task(node, 'select-mode')
-    ready_since = [None]
-    def preflight_ready():
-        if (status.get('mode') == 'FlyCo' and status.get('pre_flight_checks_pass') and
-                status.get('landed') is True and status.get('enabled') and status.get('px4_ok')):
-            if ready_since[0] is None:
-                ready_since[0] = time.monotonic()
-            return time.monotonic()-ready_since[0] >= .5
-        ready_since[0] = None
-        return False
-    wait_for(node, preflight_ready, 120., 'PX4 preflight checks did not pass; normal arming was not requested')
-    mode_task(node, 'arm')
 
 
 def planner_task(node, args):
@@ -197,7 +157,7 @@ def planner_task(node, args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', nargs='?', choices=[*CONTROL_ACTIONS, 'status', 'select-mode', 'arm', 'wait-armed', 'start-sim',
+    parser.add_argument('action', nargs='?', choices=[*CONTROL_ACTIONS, 'status', 'select-mode', 'arm', 'wait-armed',
                         'initialize', 'enable-planning', 'scan', 'text'])
     parser.add_argument('text', nargs='?')
     parser.add_argument('--sim', action='store_true', help='Use Isaac odometry and /clock')
@@ -212,8 +172,6 @@ def main():
     try:
         if args.action in CONTROL_ACTIONS:
             control_task(node, args.action)
-        elif args.action == 'start-sim':
-            start_simulation_task(node)
         elif args.action in ('status', 'select-mode', 'arm', 'wait-armed'):
             mode_task(node, args.action)
         else:

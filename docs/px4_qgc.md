@@ -123,7 +123,7 @@ ros2 launch flyco_real flyco.launch.py simulation:=true
 
 没有活动会话时，该入口先启动 Isaac、PX4 SITL、DDS Agent、传感器桥、QGC 和 RViz；已有原生仿真会话时直接复用。默认从 `~/PX4-Autopilot`、`~/PX4` 中选择有 SITL 可执行文件的目录；也可用 `px4_dir:=/实际目录` 或 `PX4_DIR` 指定。
 
-随后自动注册、就绪后切入 FlyCo 并正常解锁，启动算法，起飞至距地面约 **2 m**。正常解锁仍由 PX4 检查；不会使用强制解锁。自动解锁仅适用于本地 SITL，真机始终需要操作者正常解锁。仿真需要手动控制解锁时加 `auto_arm:=false`。
+随后自动注册 FlyCo 并等待操作者。请在 QGC 手动选择 **FlyCo** 并正常 **Arm**；启动入口不发送切模式或解锁命令。确认 FlyCo 已解锁后，自动启动算法、初始化并起飞至距地面约 **2 m**。仿真与真机均遵循这一顺序。
 
 FlyCo-UI 默认随算法打开。悬停后在底部 Text 输入目标描述，点击 **Send text** 或按 Enter。任务节点收到非空文字后等待对应的新目标点云和预测网格，自动触发规划、扫描和轨迹跟踪，无需执行 `enable-planning`、`scan` 或 `resume`。扫描完成以规划器 `/flight_end` 信号为准，完成后自动保持当前位置。
 
