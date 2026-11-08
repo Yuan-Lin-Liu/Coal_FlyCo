@@ -63,9 +63,6 @@ def build(context):
     else:
         flyco('mesh_predict_node')
         node('flyco_real', 'task.py', 'ground_heartbeat', extra={'heartbeat': True})
-        if LaunchConfiguration('ui').perform(context).lower() == 'true':
-            ui = flyco('prompt_ui')
-            critical.remove(ui)
     for process in critical:
         actions.append(RegisterEventHandler(OnProcessExit(target_action=process,
             on_exit=[EmitEvent(event=Shutdown(reason='A native FlyCo process exited'))])))
@@ -79,7 +76,6 @@ def generate_launch_description():
         DeclareLaunchArgument('role', default_value='onboard'),
         DeclareLaunchArgument('config', default_value=str(share / 'config/hardware.yaml')),
         DeclareLaunchArgument('runtime_root', default_value=str(Path.home() / '.ros/coal-flyco')),
-        DeclareLaunchArgument('ui', default_value='false'),
         DeclareLaunchArgument('start_sensors', default_value='true'),
         DeclareLaunchArgument('odometry_config', default_value=str(
             Path(get_package_share_directory('ros2_px4_odometry')) / 'config/odin_config.yaml')),

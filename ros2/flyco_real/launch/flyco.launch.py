@@ -1,4 +1,4 @@
-"""Bring up FlyCo and run the complete text-directed mission from one command."""
+"""Bring up the flight stack; text arrives from the independent ground UI."""
 import json
 import os
 import time
@@ -55,7 +55,7 @@ def build(context, state=None):
             FLYCO_ISAAC_FLIGHT_CONTROLLER='px4-native', FLYCO_ISAAC_EXTERNAL_NATIVE_MODE='1',
             FLYCO_PX4_MSGS_SETUP=session.get('px4_msgs_setup', ''), FLYCO_ISAAC_RVIZ='0',
             FLYCO_ISAAC_NO_PERCEPTION='0',
-            FLYCO_ISAAC_NO_UI='0' if arg('ui').lower() == 'true' else '1',
+            FLYCO_ISAAC_NO_UI='1',
             FLYCO_ISAAC_SEGMENTATION_BACKEND=session['segmentation_backend'],
             FLYCO_ISAAC_SEGMENTATION_ENDPOINT=session['segmentation_endpoint'])
         algorithms = ExecuteProcess(cmd=['bash', str(root/'tools/run_ros.sh')],
@@ -103,7 +103,6 @@ def generate_launch_description():
         DeclareLaunchArgument('config', default_value=str(share/'config/odin.yaml')),
         DeclareLaunchArgument('project_root', default_value=os.environ.get('COAL_FLYCO_ROOT', str(Path.cwd()))),
         DeclareLaunchArgument('session_dir', default_value=''),
-        DeclareLaunchArgument('ui', default_value='true'),
         DeclareLaunchArgument('scene', default_value='4'),
         DeclareLaunchArgument('domain', default_value='64'),
         DeclareLaunchArgument('px4_dir', default_value=os.environ.get('PX4_DIR', str(px4_dir))),

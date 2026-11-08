@@ -32,7 +32,3 @@
   executable: prompt_node.py
 - name: mesh_predict_node
   executable: mesh_predict_node.py
-- name: prompt_ui
-  executable: prompt_ui_cv_node.py
-  remappings:
-    /img_topic: /flyco/camera/rgb

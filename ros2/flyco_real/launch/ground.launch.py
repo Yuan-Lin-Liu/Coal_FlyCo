@@ -1,4 +1,4 @@
-"""ROS2 entrypoint for semantic perception, mesh prediction and the ground UI."""
+"""Ground prediction and optional semantic/RViz processes; launch the UI separately."""
 import os
 from pathlib import Path
 import yaml
@@ -86,8 +86,7 @@ def build(context):
         PythonLaunchDescriptionSource(str(share / 'launch/native.launch.py')),
         launch_arguments={'role': 'ground', 'config': str(config),
                           'python_executable': str(predictor),
-                          'runtime_root': arg('runtime_root') or str(runtime / 'runs'),
-                          'ui': arg('ui')}.items()))
+                          'runtime_root': arg('runtime_root') or str(runtime / 'runs')}.items()))
     if arg('rviz').lower() == 'true':
         actions.append(Node(package='rviz2', executable='rviz2',
             arguments=['-d', str(share/'config/flyco_real.rviz')],
@@ -109,6 +108,5 @@ def generate_launch_description():
         DeclareLaunchArgument('runtime_root', default_value=''),
         DeclareLaunchArgument('start_semantic', default_value='false'),
         DeclareLaunchArgument('rviz', default_value='true'),
-        DeclareLaunchArgument('ui', default_value='true'),
         OpaqueFunction(function=build),
     ])

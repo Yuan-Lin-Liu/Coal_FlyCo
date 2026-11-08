@@ -115,7 +115,7 @@ source install/setup.bash
 export ROS_DOMAIN_ID=64 ROS_LOCALHOST_ONLY=0 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ```
 
-仓库已包含本机定制 PX4 对应的消息，无需加载旧消息覆盖层。从工程根目录运行一条命令：
+仓库已包含本机定制 PX4 对应的消息，无需加载旧消息覆盖层。从工程根目录启动飞行入口：
 
 ```bash
 ros2 launch flyco_real flyco.launch.py simulation:=true
@@ -125,19 +125,25 @@ ros2 launch flyco_real flyco.launch.py simulation:=true
 
 随后自动注册 FlyCo 并等待操作者。请在 QGC 手动选择 **FlyCo** 并正常 **Arm**；启动入口不发送切模式或解锁命令。确认 FlyCo 已解锁后，自动启动算法、初始化并起飞至距地面约 **2 m**。仿真与真机均遵循这一顺序。
 
-FlyCo-UI 默认随算法打开。悬停后在底部 Text 输入目标描述，点击 **Send text** 或按 Enter。任务节点收到非空文字后等待对应的新目标点云和预测网格，自动触发规划、扫描和轨迹跟踪，无需执行 `enable-planning`、`scan` 或 `resume`。扫描完成以规划器 `/flight_end` 信号为准，完成后自动保持当前位置。
-
-未收到文字或目标尚未生成网格时继续悬停。扫描过程中更换目标、切走模式或定位/控制失效会停止自动任务；不会在恢复后自行重新开始扫描。一次任务只触发一次扫描；新目标任务先结束当前任务再重启入口。
-
-不要同时运行另一份 `mode.launch.py` 或 `flyco.launch.py`。已有独立模式节点时，可用 `start_mode:=false` 复用它。需要独立传感器仿真时仍可先运行 `simulation.launch.py px4_dir:=/home/robot/PX4`，再运行合并入口。手动调试入口继续保留。
-
-无窗口验收可用 `headless:=true rviz:=false qgc:=false ui:=false`；该模式通过 `/query_text` 接收文字，常规交互使用默认 UI。另开 UI 的入口为：
+UI 由地面电脑的独立终端启动；飞行入口与地面预测入口均不创建 UI：
 
 ```bash
 ros2 launch flyco_real prompt.launch.py simulation:=true
 ```
 
-独立 UI 在仿真模式下从当前会话读取 ROS 域号。从其他目录启动时，可通过 `project_root:=/实际工程目录` 指定会话所在的工程。
+该节点只显示相机图像、接收鼠标/文字输入并通过 ROS2 发送提示，不加载预测或分割模型，可以在 FlyCo 尚未解锁时打开。悬停后在底部 Text 输入目标描述，点击 **Send text** 或按 Enter。任务节点收到非空文字后等待对应的新目标点云和预测网格，自动触发规划、扫描和轨迹跟踪，无需执行 `enable-planning`、`scan` 或 `resume`。扫描完成以规划器 `/flight_end` 信号为准，完成后自动保持当前位置。
+
+未收到文字或目标尚未生成网格时继续悬停。扫描过程中更换目标、切走模式或定位/控制失效会停止自动任务；不会在恢复后自行重新开始扫描。一次任务只触发一次扫描；新目标任务先结束当前任务再重启入口。
+
+不要同时运行另一份 `mode.launch.py` 或 `flyco.launch.py`。已有独立模式节点时，可用 `start_mode:=false` 复用它。需要独立传感器仿真时仍可先运行 `simulation.launch.py px4_dir:=/home/robot/PX4`，再运行合并入口。手动调试入口继续保留。
+
+飞行入口的无窗口参数为 `headless:=true rviz:=false qgc:=false`。独立 UI 可以与仿真运行在同一电脑，也可以运行在另一台地面电脑；后者使用与仿真相同的 ROS 域号，例如默认仿真域 64：
+
+```bash
+ros2 launch flyco_real prompt.launch.py simulation:=true domain:=64
+```
+
+显式 `domain` 优先；未指定时，仿真 UI 从本机当前会话读取 ROS 域号，没有会话时使用已有 `ROS_DOMAIN_ID`（未配置则为 64）。同机从其他目录启动时，可通过 `project_root:=/实际工程目录` 指定会话所在工程。双机需已有 ROS2 网络互通。UI 订阅 `/isaac/camera/rgb`，发布 `/query_text`；真机省略 `simulation:=true`，图像来源为 `/flyco/camera/rgb`，默认沿用终端的 ROS 网络配置。
 
 RViz 的 **Camera field of view** 使用 `/flyco/camera/fov`，由相机内参和实际光学坐标 TF 绘制；起飞前和悬停时也能显示红色视锥，无需先产生规划轨迹。已打开的旧 RViz 可直接将该显示项的 Topic 改为此话题。仿真锥顶位于相机光心，即机体前方约 0.125 m；应与机体安装位置对应。更新相机 TF 修复后，先落地停桨，再重启当前会话。临时独立启动视锥节点：
 

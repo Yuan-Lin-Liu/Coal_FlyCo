@@ -25,7 +25,7 @@ def build(context):
     common = {'config': str(config), 'runtime_root': LaunchConfiguration('runtime_root').perform(context)}
     if role == 'ground':
         return [IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share / 'launch/native.launch.py')),
-                launch_arguments={**common, 'role': 'ground', 'ui': LaunchConfiguration('ui').perform(context)}.items())]
+                launch_arguments={**common, 'role': 'ground'}.items())]
     _, run, params = prepare_parameters(get_package_share_directory('flyco_ros2'),
         Path(get_package_prefix('flyco_ros2')) / 'lib/flyco_ros2', config, common['runtime_root'])
     odin_share = Path(get_package_share_directory('odin_ros_driver'))
@@ -78,6 +78,5 @@ def generate_launch_description():
         DeclareLaunchArgument('runtime_root', default_value=str(Path.home() / '.ros/coal-flyco')),
         DeclareLaunchArgument('start_driver', default_value='true'),
         DeclareLaunchArgument('start_mode', default_value='true'),
-        DeclareLaunchArgument('ui', default_value='false'),
         OpaqueFunction(function=build),
     ])

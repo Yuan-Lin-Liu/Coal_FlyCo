@@ -167,12 +167,20 @@ ros2 launch flyco_real semantic.launch.py python:=/实际Orin模型环境/bin/py
 
 如启用语义 API token，在 Orin 的服务与算法终端设置相同 `SAM_AD_API_TOKEN`。
 
-**地面终端 A：预测、提示界面与 RViz2**：
+**地面终端 A：预测、心跳与 RViz2**：
 
 ```bash
 ros2 launch flyco_real ground.launch.py config:="$PWD/config/vehicle.odin.local.yaml" \
   model_python:=/实际地面模型环境/bin/python models_dir:=/实际权重目录 rviz:=true
 ```
+
+**地面终端 B：独立图传与文字输入 UI**：
+
+```bash
+ros2 launch flyco_real prompt.launch.py
+```
+
+UI 使用地面电脑的 ROS Python/OpenCV 环境，不需要预测或分割模型环境；通过 `/flyco/camera/rgb` 显示机载图像，通过 `/query_text` 发送目标描述。两端沿用相同 ROS 域和可互通的网络配置；需要显式指定时，给 UI 增加 `domain:=实际域号`。`ground.launch.py` 和机载 `flyco.launch.py` 均不再启动 UI。
 
 **Orin 终端 D：模式注册与解锁后启动算法**：
 
@@ -186,9 +194,9 @@ ros2 launch flyco_real flyco.launch.py config:="$PWD/config/vehicle.odin.local.y
 
 确认定位和地面预测链路正常，等待 RC/QGC 出现 **FlyCo**，选择后在地面正常解锁；也支持在 Position 解锁后切入 FlyCo。解锁后算法自动启动，初始化完成输出 `FlyCo ready`，任务节点调度 PX4 内置 Takeoff，升至距本次地面位置约 2 m 后返回 FlyCo 悬停。返回 FlyCo 不会重复起飞；未解锁、空中或落地状态未知时不自动起飞。
 
-需要单独打开文字输入窗口时，在地面电脑执行 `ros2 launch flyco_real prompt.launch.py`，在 **FlyCo-UI** 底部 Text 输入英文描述，点击 **Send text** 发送。已有地面 UI 时不重复打开。
+地面终端 B 的 UI 可在解锁前独立打开。起飞悬停后，在 **FlyCo-UI** 底部 Text 输入英文描述，点击 **Send text** 或按 Enter 发送。
 
-起飞悬停后发送目标文字，任务节点等待新目标点云及预测网格后，自动开启规划、跟踪和扫描；完成后悬停：
+任务节点收到文字后等待新目标点云及预测网格，自动开启规划、跟踪和扫描；完成后悬停。也可通过地面终端发送文字：
 
 ```bash
 ros2 run flyco_real task.py text '一个煤堆'

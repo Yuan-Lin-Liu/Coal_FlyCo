@@ -465,7 +465,7 @@ ros2 run flyco_real check_semantic.py \
 
 如设置了 `SAM_AD_API_TOKEN`，服务和机载算法终端需使用相同 token。
 
-### 8.4 地面 A：预测、UI、RViz 与心跳
+### 8.4 地面 A：预测、RViz 与心跳
 
 ```bash
 ros2 launch flyco_real ground.launch.py \
@@ -475,12 +475,20 @@ ros2 launch flyco_real ground.launch.py \
   models_dir:="$PWD/.local/flyco/models" \
   cuda_home:="$PWD/.local/deploy/cuda-root/usr/local/cuda-11.8" \
   cache_dir:="$PWD/.local/deploy/torch_extensions" \
-  start_semantic:=false ui:=true rviz:=true
+  start_semantic:=false rviz:=true
 ```
 
 上述 CUDA 路径对应第 5 节的一键安装脚本；如使用自行安装的完整 CUDA，则将 `cuda_home` 改为实际目录。也可以省略该参数，由启动文件在配置路径不可用时查找项目内 CUDA。不要传入不存在的 `/usr/local/cuda-11.8`。
 
-此终端会发布 `/flyco/ground/heartbeat`，运行期间保持开启。另起 QGC 并接入真机。界面默认不在地面启动语义服务，机载配置的 HTTP 地址仍指向 Orin 自身。
+此终端会发布 `/flyco/ground/heartbeat`，运行期间保持开启。另起 QGC 并接入真机。该入口默认不在地面启动语义服务，机载配置的 HTTP 地址仍指向 Orin 自身。
+
+**地面 B：独立 UI 与文字发送节点**，在已加载 ROS2 与工程环境的新终端执行：
+
+```bash
+ros2 launch flyco_real prompt.launch.py
+```
+
+UI 与预测进程独立，机载飞行入口也不创建窗口。该节点只需要 ROS Python、OpenCV 和 `cv_bridge`，无需模型环境或 CUDA；订阅 `/flyco/camera/rgb`，向 `/query_text` 发送文字。两端沿用相同 ROS 域和已配置的网络；UI 可通过 `domain:=实际域号` 显式匹配机载域。可以在未解锁时打开界面，起飞悬停后输入描述并点击 **Send text**。本机仿真时改用 `ros2 launch flyco_real prompt.launch.py simulation:=true`；跨电脑仿真时再指定对应 `domain`。
 
 ### 8.5 Orin D：模式注册，首次先保持手动使能
 
