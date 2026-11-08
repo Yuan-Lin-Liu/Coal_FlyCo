@@ -156,6 +156,8 @@ ros2 launch flyco_real prompt.launch.py simulation:=true
 ```
 
 窗口名为 **FlyCo-UI**，点击底部 Text 输入框编辑英文描述，点击 **Send text** 或按 Enter 发送。也可在启动 C 时增加 `ui:=true`。文字发送与自动起飞相互独立。
+独立 UI 在仿真模式下从当前会话读取 ROS 域号，避免窗口落入默认域 0 后只有黑屏。
+从其他目录启动时，可通过 `project_root:=/实际工程目录` 指定会话所在的工程。
 
 RViz 的 **Camera field of view** 使用 `/flyco/camera/fov`，由相机内参和实际光学坐标 TF 绘制；起飞前和悬停时也能显示红色视锥，无需先产生规划轨迹。已打开的旧 RViz 可直接将该显示项的 Topic 改为此话题。仿真锥顶位于相机光心，即机体前方约 0.125 m；应与机体安装位置对应。更新相机 TF 修复后，先落地停桨，再重启三终端流程。临时独立启动视锥节点：
 
