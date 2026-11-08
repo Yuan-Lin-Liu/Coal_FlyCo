@@ -188,12 +188,10 @@ ros2 launch flyco_real flyco.launch.py config:="$PWD/config/vehicle.odin.local.y
 
 需要单独打开文字输入窗口时，在地面电脑执行 `ros2 launch flyco_real prompt.launch.py`，在 **FlyCo-UI** 底部 Text 输入英文描述，点击 **Send text** 发送。已有地面 UI 时不重复打开。
 
-起飞悬停后发送目标文字，等待目标点云及预测网格，再激活规划和扫描：
+起飞悬停后发送目标文字，任务节点等待新目标点云及预测网格后，自动开启规划、跟踪和扫描；完成后悬停：
 
 ```bash
 ros2 run flyco_real task.py text '一个煤堆'
-ros2 run flyco_real task.py enable-planning
-ros2 run flyco_real task.py scan
 ```
 
 按需要执行对应操作：

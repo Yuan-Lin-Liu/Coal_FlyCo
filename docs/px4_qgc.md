@@ -115,55 +115,40 @@ source install/setup.bash
 export ROS_DOMAIN_ID=64 ROS_LOCALHOST_ONLY=0 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ```
 
-仓库已包含本机定制 PX4 对应的消息，无需再加载旧消息覆盖层。先关闭旧 QGC，再启动：
-
-**终端 A：仿真、PX4、QGC、RViz 与传感器桥**：
-
-```bash
-ros2 launch flyco_real simulation.launch.py \
-  px4_dir:=/home/robot/PX4
-```
-
-本机有效 SITL 位于 `/home/robot/PX4`，其他机器将 `px4_dir` 改为实际编译目录。默认 `start_mode:=false start_algorithms:=false`：终端 A 运行仿真、飞控、DDS Agent、传感器桥、地面心跳及 RViz。旧会话应先落地退出，再按此流程启动。
-
-**终端 B：注册、使能及解锁后启动算法**：
+仓库已包含本机定制 PX4 对应的消息，无需加载旧消息覆盖层。从工程根目录运行一条命令：
 
 ```bash
 ros2 launch flyco_real flyco.launch.py simulation:=true
 ```
 
-此入口立即启动 C++ 模式注册和控制桥，在定位与 PX4 就绪后自动使能；等待 FlyCo 模式正常解锁时，规划、感知、聚类、预测和任务节点尚未启动。命令本身不会解锁。
+没有活动会话时，该入口先启动 Isaac、PX4 SITL、DDS Agent、传感器桥、QGC 和 RViz；已有原生仿真会话时直接复用。默认从 `~/PX4-Autopilot`、`~/PX4` 中选择有 SITL 可执行文件的目录；也可用 `px4_dir:=/实际目录` 或 `PX4_DIR` 指定。
 
-1. 等待 QGC 出现 **FlyCo**，选择该模式并正常 **Arm**。也支持先在 Position 正常解锁，再切入 FlyCo。
-2. 入口收到 FlyCo 已解锁的状态后，自动启动算法并初始化规划器，输出 `FlyCo ready`。
-3. 地面状态明确、定位和执行器就绪时，自动执行 PX4 Takeoff，升至距本次地面位置约 **2 m** 后返回 FlyCo 悬停。
+随后自动注册、就绪后切入 FlyCo 并正常解锁，启动算法，起飞至距地面约 **2 m**。正常解锁仍由 PX4 检查；不会使用强制解锁。自动解锁仅适用于本地 SITL，真机始终需要操作者正常解锁。仿真需要手动控制解锁时加 `auto_arm:=false`。
 
-算法每次 launch 只启动一次；Takeoff 返回 FlyCo 不会重复起飞。初始化期间上锁、切走模式或丢失地面状态会取消待执行的起飞。空中激活可以启动算法，但不自动追加 2 m 起飞。
+FlyCo-UI 默认随算法打开。悬停后在底部 Text 输入目标描述，点击 **Send text** 或按 Enter。任务节点收到非空文字后等待对应的新目标点云和预测网格，自动触发规划、扫描和轨迹跟踪，无需执行 `enable-planning`、`scan` 或 `resume`。扫描完成以规划器 `/flight_end` 信号为准，完成后自动保持当前位置。
 
-不要同时运行另一个 `mode.launch.py`。已有独立模式节点时，可用 `flyco.launch.py simulation:=true start_mode:=false` 复用它；`mode.launch.py` 继续保留为单独注册/联调入口。
+未收到文字或目标尚未生成网格时继续悬停。扫描过程中更换目标、切走模式或定位/控制失效会停止自动任务；不会在恢复后自行重新开始扫描。一次任务只触发一次扫描；新目标任务先结束当前任务再重启入口。
 
-需要在解锁前使用文字窗口时，可以独立打开：
+不要同时运行另一份 `mode.launch.py` 或 `flyco.launch.py`。已有独立模式节点时，可用 `start_mode:=false` 复用它。需要独立传感器仿真时仍可先运行 `simulation.launch.py px4_dir:=/home/robot/PX4`，再运行合并入口。手动调试入口继续保留。
+
+无窗口验收可用 `headless:=true rviz:=false qgc:=false ui:=false`；该模式通过 `/query_text` 接收文字，常规交互使用默认 UI。另开 UI 的入口为：
 
 ```bash
 ros2 launch flyco_real prompt.launch.py simulation:=true
 ```
 
-窗口名为 **FlyCo-UI**，点击底部 Text 输入框编辑英文描述，点击 **Send text** 或按 Enter 发送。也可给合并入口增加 `ui:=true`，随算法在解锁后打开。文字发送与自动起飞相互独立；解锁前算法尚未启动时，发送文字应等到算法就绪后再操作。
-独立 UI 在仿真模式下从当前会话读取 ROS 域号，避免窗口落入默认域 0 后只有黑屏。
-从其他目录启动时，可通过 `project_root:=/实际工程目录` 指定会话所在的工程。
+独立 UI 在仿真模式下从当前会话读取 ROS 域号。从其他目录启动时，可通过 `project_root:=/实际工程目录` 指定会话所在的工程。
 
-RViz 的 **Camera field of view** 使用 `/flyco/camera/fov`，由相机内参和实际光学坐标 TF 绘制；起飞前和悬停时也能显示红色视锥，无需先产生规划轨迹。已打开的旧 RViz 可直接将该显示项的 Topic 改为此话题。仿真锥顶位于相机光心，即机体前方约 0.125 m；应与机体安装位置对应。更新相机 TF 修复后，先落地停桨，再重启三终端流程。临时独立启动视锥节点：
+RViz 的 **Camera field of view** 使用 `/flyco/camera/fov`，由相机内参和实际光学坐标 TF 绘制；起飞前和悬停时也能显示红色视锥，无需先产生规划轨迹。已打开的旧 RViz 可直接将该显示项的 Topic 改为此话题。仿真锥顶位于相机光心，即机体前方约 0.125 m；应与机体安装位置对应。更新相机 TF 修复后，先落地停桨，再重启当前会话。临时独立启动视锥节点：
 
 ```bash
 ros2 run flyco_real camera_fov.py --ros-args -p simulation:=true -p use_sim_time:=true
 ```
 
-悬停后，若需要继续扫描，在另一个已加载环境的终端发送文字；等待 RViz 出现目标点云及预测网格，再逐条激活规划和扫描：
+也可以在已加载仿真环境的终端发送目标文字，后续规划和扫描由任务节点自动完成：
 
 ```bash
 ros2 run flyco_real task.py text 'A single large pile of black coal.' --sim
-ros2 run flyco_real task.py enable-planning --sim
-ros2 run flyco_real task.py scan --sim
 ```
 
 需要时执行对应动作：
@@ -177,7 +162,7 @@ ros2 run flyco_real task.py status
 
 原生仓库仿真将 PX4 本地位置遥测接收超时与机体定位超时分开：PX4 本地遥测允许 1 秒以内延迟，机体定位和指令仍使用各自门限。持续数据失效时停止控制并请求降落；若 PX4 已切 RTL，仿真通过独立 MAVLink 请求就地 Land，避免默认返航先爬升 30 米。诊断保存在控制状态的 `last_control_fault` 和仿真状态的 `last_safety_action` 中。该室内策略仅作用于原生 SITL，真机仍需单独配置和验收 PX4 失效策略。
 
-降落时 QGC 显示 Land。确认实际落地、上锁、停桨后，再结束合并入口 B 和仿真 A；控制状态见 `/flyco/control/status`，任务状态见 `/flyco/mission/status`。原生模式名称以 QGC 和控制节点为准，Isaac 面板可能概括显示 AUTO。
+降落时 QGC 显示 Land。确认实际落地、上锁、停桨后，再结束合并入口；控制状态见 `/flyco/control/status`，任务状态见 `/flyco/mission/status`。原生模式名称以 QGC 和控制节点为准，Isaac 面板可能概括显示 AUTO。
 
 旧 Python 仿真入口保留；`simulation.launch.py start_mode:=true start_algorithms:=true` 可恢复内置控制与算法，此时不要再运行合并入口。
 

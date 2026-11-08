@@ -16,7 +16,7 @@ from sensor_msgs.msg import Joy
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from flyco_real.px4_dds import topic
-from flyco_real.task import CONTROL_ACTIONS, control_task, mode_task, planner_task
+from flyco_real.task import CONTROL_ACTIONS, control_task, mode_task, planner_task, start_simulation_task
 
 
 @pytest.fixture
@@ -120,3 +120,11 @@ def test_sim_task_uses_isaac_odometry_and_releases_joy(terminal):
     assert list(received[-1].buttons) == [0]*12
     planner_task(client, SimpleNamespace(action='text', sim=True, text='一个煤堆'))
     assert prompts[-1].data == '一个煤堆'
+
+
+def test_simulation_start_rejects_non_sitl_session(terminal, tmp_path):
+    _, client = terminal
+    (tmp_path/'session.json').write_text(json.dumps({'flight_controller': 'hardware'}))
+    client.declare_parameter('session_dir', str(tmp_path))
+    with pytest.raises(RuntimeError, match='active local PX4 SITL'):
+        start_simulation_task(client)

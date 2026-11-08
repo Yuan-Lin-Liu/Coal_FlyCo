@@ -499,6 +499,7 @@ class PX4Bridge(Node):
             'mode_registered': self.flight_mode.mode_id is not None,
             'arming_checks': 'PX4 mode requirements',
             'armed': bool(self.state and self.state.arming_state == VehicleStatus.ARMING_STATE_ARMED),
+            'pre_flight_checks_pass': bool(self.state and self.state.pre_flight_checks_pass),
             'check_odom_freshness': self.settings['check_odom_freshness'],
             'odom_fresh': self.odom_fresh(),
             'odom_ok':self.odom_ok(),'px4_ok':not bool(issue),

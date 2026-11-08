@@ -541,12 +541,7 @@ ros2 topic list -t | rg '/fmu/|/flyco/|/prediction/'
 ros2 run flyco_real task.py text 'A single large pile of black coal.'
 ```
 
-等待目标点云和 `/prediction/predicted_mesh` 出现，再逐条执行：
-
-```bash
-ros2 run flyco_real task.py enable-planning
-ros2 run flyco_real task.py scan
-```
+任务节点等待新目标点云和 `/prediction/predicted_mesh` 就绪后，自动开启规划、扫描和轨迹跟踪；规划器报告扫描完成后保持当前位置。
 
 需要时分别执行：
 

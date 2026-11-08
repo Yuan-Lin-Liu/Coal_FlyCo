@@ -37,7 +37,7 @@ NVIDIA 官方容器和安装要求：[Isaac Sim 5.1](https://docs.isaacsim.omniv
 
 若下载依赖本机 HTTP 代理，应同时配置宿主机的 `http_proxy` / `https_proxy`、Docker daemon 的镜像下载代理，以及 Docker 客户端配置中的构建代理。构建期间访问 `127.0.0.1` 代理时，可设置 `COAL_BUILD_NETWORK=host`。此选项只影响镜像构建网络；不要通过关闭 TLS 校验解决证书错误。
 
-`dev-real` 日常仿真先运行 `ros2 launch flyco_real simulation.launch.py`，再运行 `ros2 launch flyco_real flyco.launch.py simulation:=true`，同一入口完成模式注册与使能，在 FlyCo 正常解锁后启动算法，初始化后自动升至约 2 m。其他任务使用 `ros2 run flyco_real task.py ...`；逐条指令见 [ROS2 仿真入口](docs/px4_qgc.md#原生-flyco-模式仿真ros2-终端入口)。
+`dev-real` 仿真使用一条命令 `ros2 launch flyco_real flyco.launch.py simulation:=true`：自动启动仿真（或复用已有会话）、注册 FlyCo、正常解锁并起飞至约 2 m；在默认打开的 UI 发送文字后，自动等待目标网格、规划、跟踪并完成扫描，结束后悬停。真机仍由操作者正常解锁。详见 [ROS2 仿真入口](docs/px4_qgc.md#原生-flyco-模式仿真ros2-终端入口)。
 
 `dev-real` 负责 Odin + Orin 原生 ROS2 部署及 PX4 动态 FlyCo 模式，见 [部署说明](docs/deploy_orin.md)。论文要求地面运行预测，Orin 运行定位、感知、规划与轨迹执行；原生 FlyCo 模式已通过起飞、预测、扫描和降落闭环，详见 [验收记录](docs/dev-real-status.md)；Orin/Odin 实机验收待硬件连接后进行。
 
