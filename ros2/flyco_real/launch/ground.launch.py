@@ -14,6 +14,10 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
+def default_config(root):
+    return str(Path(root) / 'config/vehicle.odin.local.yaml')
+
+
 def build(context):
     def arg(name):
         return LaunchConfiguration(name).perform(context)
@@ -22,6 +26,14 @@ def build(context):
         return Path(os.path.abspath(os.path.expanduser(os.path.expandvars(value))))
 
     root = path(arg('project_root'))
+    if LaunchConfiguration('segmentation_only', default='false').perform(context).lower() == 'true':
+        share = Path(get_package_share_directory('flyco_real'))
+        return [IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(str(share / 'launch/segmentation.launch.py')),
+            launch_arguments={'project_root': str(root), 'rviz': arg('rviz'),
+                              'config': str(share / 'config/segmentation.yaml'),
+                              'source_dir': arg('semantic_root') or str(root / 'third_party/SAM_AD_Perception'),
+                              'model_python': arg('semantic_python') or str(root / '.local/deploy/semantic/bin/python')}.items())]
     config = path(arg('config'))
     settings = yaml.safe_load(config.read_text()).get('deployment', {})
     runtime = path(os.environ.get('FLYCO_NATIVE_ROOT', str(root / 'runtime/native')))
@@ -98,7 +110,7 @@ def generate_launch_description():
     root = os.environ.get('COAL_FLYCO_ROOT', str(Path.cwd()))
     return LaunchDescription([
         DeclareLaunchArgument('project_root', default_value=root),
-        DeclareLaunchArgument('config', default_value=[LaunchConfiguration('project_root'), '/config/vehicle.local.yaml']),
+        DeclareLaunchArgument('config', default_value=default_config(root)),
         DeclareLaunchArgument('model_python', default_value=''),
         DeclareLaunchArgument('models_dir', default_value=''),
         DeclareLaunchArgument('semantic_root', default_value=''),
@@ -107,6 +119,8 @@ def generate_launch_description():
         DeclareLaunchArgument('cache_dir', default_value=''),
         DeclareLaunchArgument('runtime_root', default_value=''),
         DeclareLaunchArgument('start_semantic', default_value='false'),
-        DeclareLaunchArgument('rviz', default_value='true'),
+        DeclareLaunchArgument('segmentation_only', default_value='false', choices=['true', 'false'],
+                              description='Run ROS image segmentation without the prediction stack or HTTP service'),
+        DeclareLaunchArgument('rviz', default_value='false'),
         OpaqueFunction(function=build),
     ])

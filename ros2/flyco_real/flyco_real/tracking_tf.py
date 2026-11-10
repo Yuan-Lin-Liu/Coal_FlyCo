@@ -71,6 +71,16 @@ class TrackingTF(SAMTrackingManager):
     def _build_camera_pose_from_airsim(self, odom_msg, image_stamp=None):
         return self.real_camera_pose
 
+    def destroy_node(self):
+        # main_for drains tracking callbacks before teardown. Release only this
+        # provider's session so a new tracker can acquire the single-target server.
+        try:
+            self.provider.reset()
+        except Exception as error:
+            # An unavailable inference server must not prevent local ROS cleanup.
+            self.get_logger().error('Could not release semantic inference session: ' + str(error))
+        return super().destroy_node()
+
 
 def main():
     main_for(TrackingTF, 'sam_tracking')

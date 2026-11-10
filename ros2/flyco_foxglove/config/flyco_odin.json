@@ -1,0 +1,234 @@
+{
+  "configById": {
+    "3D!flyco": {
+      "fixedFrame": "world",
+      "followTf": "world",
+      "followMode": "follow-none",
+      "scene": {
+        "backgroundColor": "#1c2028"
+      },
+      "topics": {
+        "/foxglove/poses/flyco/odom": {
+          "visible": true,
+          "color": "#ffb41eff"
+        },
+        "/traj_server/odom_traj": {
+          "visible": true,
+          "color": "#19ff00ff",
+          "lineWidth": 0.045
+        },
+        "/traj_server/exec_traj": {
+          "visible": true,
+          "color": "#0000ffff",
+          "lineWidth": 0.045
+        },
+        "/flyco/camera/fov": {
+          "visible": true
+        },
+        "/traj_server/robot_vis": {
+          "visible": false
+        },
+        "/traj_server/planned_pos_traj": {
+          "visible": false
+        },
+        "/traj_server/planned_ori_traj": {
+          "visible": false
+        },
+        "/flyco/lidar/world": {
+          "visible": true,
+          "colorMode": "colormap",
+          "colorMap": "turbo",
+          "colorField": "z",
+          "pointSize": 2.0,
+          "decayTime": 0.0
+        },
+        "/flyco/camera/world_points": {
+          "visible": false,
+          "colorMode": "rgb",
+          "colorField": "rgb",
+          "pointSize": 2.0,
+          "decayTime": 0.0
+        },
+        "/tracking/target_pointcloud": {
+          "visible": true,
+          "colorMode": "flat",
+          "flatColor": "#32ff64ff",
+          "pointSize": 3.0,
+          "decayTime": 0.0
+        },
+        "/tracking/target_pc": {
+          "visible": true,
+          "colorMode": "flat",
+          "flatColor": "#ff6432ff",
+          "pointSize": 2.0,
+          "decayTime": 0.0
+        },
+        "/mesh_pred/partial_pc": {
+          "visible": true,
+          "colorMode": "flat",
+          "flatColor": "#ffd232ff",
+          "pointSize": 2.0,
+          "decayTime": 0.0
+        },
+        "/tracking/env_pc": {
+          "visible": false,
+          "colorMode": "flat",
+          "flatColor": "#dcdcdcff",
+          "pointSize": 2.0,
+          "decayTime": 0.0
+        },
+        "/prediction/mesh_vis": {
+          "visible": true
+        },
+        "/prediction/mesh": {
+          "visible": false
+        },
+        "/mesh_pred/pred_pc": {
+          "visible": false,
+          "colorMode": "flat",
+          "flatColor": "#3caaffff",
+          "pointSize": 2.0,
+          "decayTime": 0.0
+        },
+        "/sdf_map/occupancy_all": {
+          "visible": false,
+          "colorMode": "colormap",
+          "colorMap": "turbo",
+          "colorField": "z",
+          "pointSize": 15.0,
+          "decayTime": 0.0
+        },
+        "/sdf_map/occupancy_all_inflate": {
+          "visible": false,
+          "colorMode": "flat",
+          "flatColor": "#6e6e6e1a",
+          "pointSize": 3.0,
+          "decayTime": 0.0
+        },
+        "/sdf_map/mapping_range": {
+          "visible": false
+        },
+        "/hcopp/decomp_global_path": {
+          "visible": true
+        },
+        "/hcopp/HCOPP_Path": {
+          "visible": false
+        },
+        "/hcopp/valid_vp": {
+          "visible": false
+        },
+        "/local_planning/vp_local": {
+          "visible": false
+        },
+        "/local_planning/local_updated_tour": {
+          "visible": false
+        },
+        "/hcoppTraj/applied_trajectory": {
+          "visible": true
+        },
+        "/hcoppTraj/waypoints": {
+          "visible": false
+        },
+        "/hcopp/uncovered_area": {
+          "visible": false,
+          "colorMode": "flat",
+          "flatColor": "#ff0000b2",
+          "pointSize": 17.0,
+          "decayTime": 0.0
+        },
+        "/rgb_mapping/rgb_map": {
+          "visible": false,
+          "colorMode": "rgb",
+          "colorField": "rgb",
+          "pointSize": 3.0,
+          "decayTime": 0.0
+        }
+      },
+      "transforms": {
+        "world": {
+          "visible": true
+        }
+      },
+      "layers": {
+        "grid-0": {
+          "visible": true,
+          "label": "Grid",
+          "instanceId": "grid-0",
+          "layerId": "foxglove.Grid",
+          "size": 64.0,
+          "divisions": 64,
+          "lineWidth": 1,
+          "color": "#50555f80",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "order": 0
+        }
+      },
+      "cameraState": {
+        "perspective": true,
+        "distance": 55.0,
+        "phi": 44.163376389534136,
+        "thetaOffset": -141.5662015617741,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "targetOffset": [
+          0.0,
+          0.0,
+          2.0
+        ],
+        "fovy": 45,
+        "near": 0.05,
+        "far": 5000
+      }
+    },
+    "Image!flyco1": {
+      "cameraTopic": "/flyco/camera/rgb",
+      "imageMode": {
+        "imageTopic": "/flyco/camera/rgb"
+      },
+      "topics": {},
+      "layers": {}
+    },
+    "Image!flyco2": {
+      "cameraTopic": "/tracking/mask/image",
+      "imageMode": {
+        "imageTopic": "/tracking/mask/image"
+      },
+      "topics": {},
+      "layers": {}
+    }
+  },
+  "layout": {
+    "direction": "row",
+    "first": "3D!flyco",
+    "second": {
+      "direction": "column",
+      "first": "Image!flyco1",
+      "second": "Image!flyco2",
+      "splitPercentage": 50.0
+    },
+    "splitPercentage": 72
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  }
+}

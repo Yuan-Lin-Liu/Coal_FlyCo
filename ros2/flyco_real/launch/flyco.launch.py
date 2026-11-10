@@ -129,8 +129,6 @@ def generate_launch_description():
         DeclareLaunchArgument('px4_dir', default_value=os.environ.get('PX4_DIR', str(px4_dir))),
         DeclareLaunchArgument('headless', default_value='false'),
         DeclareLaunchArgument('rviz', default_value='true'),
-        DeclareLaunchArgument('qgc', default_value='true'),
-        DeclareLaunchArgument('qgc_path', default_value=str(Path.home()/'QGroundControl-x86_64.AppImage')),
         DeclareLaunchArgument('start_mode', default_value='true',
                              description='Register FlyCo here; false only when a separate mode node is already running'),
         DeclareLaunchArgument('start_semantic', default_value='true'),

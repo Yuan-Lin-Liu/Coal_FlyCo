@@ -20,10 +20,13 @@ def build(context):
         domain = session.get('domain', os.environ.get('ROS_DOMAIN_ID', '64'))
     if simulation or domain:
         node_env = {'ROS_DOMAIN_ID': str(domain), 'ROS_LOCALHOST_ONLY': '0'}
+    image_topic = LaunchConfiguration('image_topic', default='').perform(context)
+    text_topic = LaunchConfiguration('text_topic', default='/query_text').perform(context)
     return [Node(package='flyco_ros2', executable='prompt_ui_cv_node.py', name='prompt_ui',
         parameters=[{'use_sim_time': simulation, 'initial_text_prompt': ParameterValue(
             LaunchConfiguration('text'), value_type=str)}],
-        remappings=[('/img_topic', '/isaac/camera/rgb' if simulation else '/flyco/camera/rgb')],
+        remappings=[('/img_topic', image_topic or ('/isaac/camera/rgb' if simulation else '/flyco/camera/rgb')),
+                    ('/query_text', text_topic)],
         additional_env=node_env, output='screen')]
 
 
@@ -34,5 +37,7 @@ def generate_launch_description():
         DeclareLaunchArgument('domain', default_value='',
                              description='Match the flight computer ROS domain; empty uses the environment or local simulation session'),
         DeclareLaunchArgument('text', default_value='A single large pile of black coal.'),
+        DeclareLaunchArgument('image_topic', default_value=''),
+        DeclareLaunchArgument('text_topic', default_value='/query_text'),
         OpaqueFunction(function=build),
     ])

@@ -1,0 +1,59 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ''
+  Enabled: true
+  Global Options:
+    Background Color: 40; 40; 40
+    Fixed Frame: odom
+    Frame Rate: 15
+  Displays:
+    - Class: rviz_default_plugins/Image
+      Name: Odin Image
+      Enabled: true
+      Value: true
+      Normalize Range: true
+      Topic:
+        Value: /odin1/image
+        Depth: 1
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+    - Class: rviz_default_plugins/Image
+      Name: Segmentation Overlay
+      Enabled: true
+      Value: true
+      Normalize Range: true
+      Topic:
+        Value: /perception/segmentation/overlay
+        Depth: 1
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+    - Class: rviz_default_plugins/Image
+      Name: Target Mask
+      Enabled: true
+      Value: true
+      Normalize Range: false
+      Min Value: 0
+      Max Value: 255
+      Topic:
+        Value: /perception/segmentation/mask
+        Depth: 1
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+  Tools:
+    - Class: rviz_default_plugins/Interact
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 5
+      Name: Current View
+Window Geometry:
+  Width: 1400
+  Height: 850

@@ -1,0 +1,14 @@
+# Ground-only image/text segmentation. No PX4, odometry, CameraInfo or TF input.
+ground_segmentation:
+  ros__parameters:
+    use_sim_time: false
+    image_topic: /odin1/image
+    text_topic: /query_text
+    mask_topic: /perception/segmentation/mask
+    overlay_topic: /perception/segmentation/overlay
+    status_topic: /perception/segmentation/status
+    initial_text: ''
+    max_fps: 2.0
+    startup_timeout: 180.0
+    inference_timeout: 60.0
+    status_period: 2.0

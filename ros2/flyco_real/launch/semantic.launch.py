@@ -6,18 +6,33 @@ Orin.  In that deployment the bind address must be reachable from Orin.
 import os
 from pathlib import Path
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
+
+
+def build(context):
+    environment = dict(os.environ)
+    for name in ('PYTHONPATH', 'LD_LIBRARY_PATH', 'CUDA_HOME', 'CPATH', 'POINTNET2_OPS_EXTENSION_PATH'):
+        environment.pop(name, None)
+    environment['PYTHONNOUSERSITE'] = '1'
+    environment.setdefault('TORCH_EXTENSIONS_DIR',
+                           str(Path(os.environ.get('COAL_FLYCO_ROOT', Path.cwd())) /
+                               '.local/deploy/semantic-extensions'))
+    command = [LaunchConfiguration('python'), '-B', '-m', 'sam_ad.server',
+               '--backend', 'A', '--bind', LaunchConfiguration('bind'),
+               '--port', LaunchConfiguration('port')]
+    if LaunchConfiguration('skip_integrity').perform(context).lower() == 'true':
+        command.append('--skip-integrity')
+    return [ExecuteProcess(cmd=command, cwd=LaunchConfiguration('source_dir'), env=environment,
+                           output='screen')]
 
 
 def generate_launch_description():
     root = os.environ.get('COAL_FLYCO_ROOT', str(Path.cwd()))
     return LaunchDescription([
         DeclareLaunchArgument('source_dir', default_value=root+'/third_party/SAM_AD_Perception'),
-        DeclareLaunchArgument('python', default_value=root+'/third_party/SAM_AD_Perception/.venv/bin/python'),
-        DeclareLaunchArgument('bind', default_value='127.0.0.1'),
+        DeclareLaunchArgument('python', default_value=root+'/.local/deploy/semantic/bin/python'),
+        DeclareLaunchArgument('bind', default_value='0.0.0.0'),
         DeclareLaunchArgument('port', default_value='8851'),
-        ExecuteProcess(cmd=[LaunchConfiguration('python'), '-B', '-m', 'sam_ad.server',
-            '--backend', 'A', '--bind', LaunchConfiguration('bind'),
-            '--port', LaunchConfiguration('port')],
-            cwd=LaunchConfiguration('source_dir'), output='screen')])
+        DeclareLaunchArgument('skip_integrity', default_value='true', choices=['true', 'false']),
+        OpaqueFunction(function=build)])

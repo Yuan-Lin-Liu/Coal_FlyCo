@@ -415,7 +415,8 @@ void FCPlanner_PP_Node::globalPlanThread()
 
           double t_old = (t_cur - last_traj_start_time).seconds();
           double t_new = (t_cur - new_traj_start_time).seconds();
-          if (t_old > 0 && t_new < 0)
+          if (t_old > 0 && t_new < 0 &&
+              last_pos_traj.getPieceNum() > 0 && last_ori_traj.getPieceNum() > 0)
           {
             pos_traj = last_pos_traj;
             ori_traj = last_ori_traj;
@@ -425,13 +426,21 @@ void FCPlanner_PP_Node::globalPlanThread()
             r_indi = new_indi;
             t_span = t_old;
           }
-          else if (t_new >= 0)
+          else if (t_new >= 0 &&
+                   new_pos_traj.getPieceNum() > 0 && new_ori_traj.getPieceNum() > 0)
           {
             pos_traj = new_pos_traj;
             ori_traj = new_ori_traj;
             r_path = new_path;
             r_indi = new_indi;
             t_span = t_new;
+          }
+          else
+          {
+            // The first trajectory can arrive before its scheduled start;
+            // there is no previous trajectory to sample during that interval.
+            this->global_planning_rate_->sleep();
+            continue;
           }
           duration = pos_traj.getTotalDuration();
 

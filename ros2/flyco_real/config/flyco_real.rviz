@@ -295,6 +295,22 @@ Visualization Manager:
     Name: Target perception
     Enabled: true
     Displays:
+    - Class: rviz_default_plugins/PointCloud2
+      Enabled: true
+      Name: Mask-selected points
+      Value: true
+      Color: 50; 255; 100
+      Color Transformer: FlatColor
+      Position Transformer: XYZ
+      Decay Time: 0
+      Size (Pixels): 3
+      Style: Points
+      Topic:
+        Value: /tracking/target_pointcloud
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
     - Class: rviz_default_plugins/Image
       Enabled: true
       Name: Semantic Perception Image
@@ -304,7 +320,7 @@ Visualization Manager:
       Max Value: 1
       Median window: 5
       Topic:
-        Value: /perception/segmentation/overlay
+        Value: /tracking/mask/image
         Depth: 2
         History Policy: Keep Last
         Reliability Policy: Best Effort

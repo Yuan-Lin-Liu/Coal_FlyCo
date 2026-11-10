@@ -39,33 +39,23 @@ def build(context):
     control_file = run / 'odin_control.yaml'
     control_file.write_text(yaml.safe_dump(control, sort_keys=False))
     calibration = run / 'odin'
-    calibration.mkdir()
+    calibration.mkdir(exist_ok=True)
     owns_driver = LaunchConfiguration('start_driver').perform(context).lower() == 'true'
     sensor_extra = {'odin_calibration_file': str(calibration / 'calib.yaml')} if owns_driver else {}
     actions = [SetEnvironmentVariable('ODIN_CALIB_DIR', str(calibration))] if owns_driver else []
     critical = []
-    perception = params.get('perception_bridge', {})
-    camera_tf = Node(
-        package='flyco_real', executable='zero_camera_tf.py', name='odin_camera_tf',
-        parameters=[{
-            'parent_frame': perception.get('body_frame', 'base_link'),
-            'child_frame': perception.get('camera_optical_frame', 'camera_0'),
-            'translation': [0.0, 0.0, 0.0],
-            'rpy': [0.0, 0.0, 0.0],
-        }], output='screen')
-    actions.append(camera_tf)
-    critical.append(camera_tf)
     if owns_driver:
         driver = Node(package='odin_ros_driver', executable='host_sdk_sample', name='odin_driver',
                       parameters=[{'config_file': str(control_file)}], output='screen')
         actions.append(driver)
         critical.append(driver)
     if role == 'sensors':
-        odometry = Node(package='ros2_px4_odometry', executable='odom_to_px4_node',
-                        name='generic_odometry_node', parameters=[
-                            LaunchConfiguration('odometry_config').perform(context), str(params_file)], output='screen')
-        actions.append(odometry)
-        critical.append(odometry)
+        if LaunchConfiguration('start_odometry').perform(context).lower() == 'true':
+            odometry = Node(package='ros2_px4_odometry', executable='odom_to_px4_node',
+                            name='generic_odometry_node', parameters=[
+                                LaunchConfiguration('odometry_config').perform(context), str(params_file)], output='screen')
+            actions.append(odometry)
+            critical.append(odometry)
         sensor = Node(package='flyco_real', executable='perception_bridge.py', name='perception_bridge',
                       parameters=[str(params_file), sensor_extra], output='screen')
         actions.append(sensor)
@@ -85,14 +75,15 @@ def build(context):
 
 
 def generate_launch_description():
-    share = Path(get_package_share_directory('flyco_real'))
+    root = Path(os.environ.get('COAL_FLYCO_ROOT', Path.home() / 'Coal_FlyCo')).expanduser()
     return LaunchDescription([
-        DeclareLaunchArgument('role', default_value='onboard'),
-        DeclareLaunchArgument('config', default_value=str(share / 'config/odin.yaml')),
+        DeclareLaunchArgument('role', default_value='sensors'),
+        DeclareLaunchArgument('config', default_value=str(root / 'config/vehicle.odin.local.yaml')),
         DeclareLaunchArgument('odometry_config', default_value=str(
             Path(get_package_share_directory('ros2_px4_odometry')) / 'config/odin_config.yaml')),
         DeclareLaunchArgument('runtime_root', default_value=str(Path.home() / '.ros/coal-flyco')),
         DeclareLaunchArgument('start_driver', default_value='true'),
+        DeclareLaunchArgument('start_odometry', default_value='true'),
         DeclareLaunchArgument('start_mode', default_value='true'),
         OpaqueFunction(function=build),
     ])

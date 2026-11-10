@@ -2,7 +2,7 @@
 # Odin's IMU and vehicle body share the same origin and axes (zero mounting offset).
 deployment:
   profile: odin
-  ros_domain_id: 0
+  ros_domain_id: 3
   rmw_implementation: rmw_fastrtps_cpp
   semantic_bind: 127.0.0.1
   semantic_port: 8851
@@ -109,11 +109,14 @@ flyco_planner:
 sam_tracking_node:
   ros__parameters:
     min_height: 0.25
+    sync_queue_size: 50
 mesh_predict_node:
   ros__parameters:
     min_height: 0.25
     recall_threshold: 0.9
     observation_voxel_size: 0.6
+    pc_topic: /tracking/target_pc
+    text_prompt_topic: /tracking/prompt/text
 prompt_ui:
   ros__parameters:
     initial_text_prompt: 一个煤堆

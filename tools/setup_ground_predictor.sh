@@ -5,9 +5,14 @@ ground_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ground_root"
 ground_deploy="$ground_root/.local/deploy"
 ground_python="$ground_deploy/predictor/bin/python"
+uv_bin="${UV_BIN:-$ground_root/.local/bin/uv}"
 ground_models="${FLYCO_MODELS:-$ground_root/.local/flyco/models}"
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONNOUSERSITE=1
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$ground_root/.local/uv-cache}"
+export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-$ground_root/.local/uv-python}"
+export UV_SYSTEM_CERTS=true
+export PATH="$ground_root/.local/bin:$PATH"
 export TORCH_EXTENSIONS_DIR="$ground_deploy/torch_extensions"
 export MAX_JOBS="${MAX_JOBS:-2}"
 export CC=gcc-11 CXX=g++-11
@@ -21,6 +26,10 @@ ground_cuda_headers() {
 
 if [[ "$(uname -m)" != x86_64 ]]; then
   echo 'This installer prepares the x86_64 ground computer, not Jetson.' >&2
+  exit 1
+fi
+if [[ ! -x "$uv_bin" ]]; then
+  echo "Project uv is missing: $uv_bin; run .local/setup/uv-install.sh first." >&2
   exit 1
 fi
 /usr/bin/python3 -c 'import sys; assert sys.version_info[:2] == (3, 10), "ROS Humble predictor needs system Python 3.10"'
@@ -37,7 +46,7 @@ if [[ "${1:-}" != --check ]]; then
     command -v "$command" >/dev/null || { echo "Missing build tool: $command" >&2; exit 1; }
   done
   if [[ ! -x "$ground_python" ]]; then
-    /usr/bin/python3 -m venv --system-site-packages "$ground_deploy/predictor"
+    "$uv_bin" venv --python /usr/bin/python3 --system-site-packages "$ground_deploy/predictor"
   fi
   if [[ ! -x "${CUDA_HOME:-/usr/local/cuda-11.8}/bin/nvcc" || ! -f "${CUDA_HOME:-/usr/local/cuda-11.8}/include/cusparse.h" ]]; then
     # Extract only the required CUDA packages. No driver or system package changes.
@@ -87,7 +96,7 @@ PY
   fi
   export PATH="$CUDA_HOME/bin:$PATH"
   export LD_LIBRARY_PATH="$CUDA_HOME/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-  "$ground_python" -m pip install --no-cache-dir --disable-pip-version-check \
+  "$uv_bin" pip install --python "$ground_python" \
     'pip<25' setuptools==69.5.1 wheel
   # Prefer already verified local GPU wheels over an equivalent remote index link.
   ground_cached_gpu=()
@@ -95,7 +104,7 @@ PY
     [[ -f "$ground_wheel" ]] && ground_cached_gpu+=("$ground_wheel")
   done
   if [[ ${#ground_cached_gpu[@]} -gt 0 ]]; then
-    "$ground_python" -m pip install --no-cache-dir --no-index --no-deps "${ground_cached_gpu[@]}"
+    "$uv_bin" pip install --python "$ground_python" --no-index --no-deps "${ground_cached_gpu[@]}"
   fi
   mapfile -t ground_cached_packages < <(/usr/bin/python3 - "$ground_deploy/downloads" <<'PY'
 from pathlib import Path
@@ -113,17 +122,17 @@ for wheel in sorted(Path(sys.argv[1]).glob('*.whl')):
 PY
   )
   if [[ ${#ground_cached_packages[@]} -gt 0 ]]; then
-    "$ground_python" -m pip install --no-cache-dir --no-index --no-deps "${ground_cached_packages[@]}"
+    "$uv_bin" pip install --python "$ground_python" --no-index --no-deps "${ground_cached_packages[@]}"
   fi
   if ! "$ground_python" -c 'import torch, torchvision; assert torch.__version__.split("+")[0] == "2.3.1"; assert torchvision.__version__.split("+")[0] == "0.18.1"' 2>/dev/null; then
-    "$ground_python" -m pip install --no-cache-dir --no-deps --disable-pip-version-check \
+    "$uv_bin" pip install --python "$ground_python" --no-deps \
       --find-links "$ground_deploy/downloads" \
       torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu118
   fi
-  "$ground_python" -m pip install --no-cache-dir --disable-pip-version-check \
+  "$uv_bin" pip install --python "$ground_python" \
     --find-links "$ground_deploy/downloads" -r tools/requirements-ground.txt
   export TORCH_CUDA_ARCH_LIST="$("$ground_python" -c 'import torch; assert torch.cuda.is_available(), "CUDA GPU unavailable"; print("%d.%d" % torch.cuda.get_device_capability())')"
-  "$ground_python" -m pip install --no-cache-dir --no-index --no-deps \
+  "$uv_bin" pip install --python "$ground_python" --no-index --no-deps \
     -f https://data.pyg.org/whl/torch-2.3.0+cu118.html torch-scatter==2.1.2+pt23cu118
   ground_cuda_headers
   if ! "$ground_python" -c 'import nksr' 2>/dev/null; then
@@ -143,7 +152,7 @@ PY
     if [[ ! -d "$ground_nksr/package/external/eigen/.git" ]]; then
       git clone --depth 1 --branch 3.4 https://gitlab.com/libeigen/eigen.git "$ground_nksr/package/external/eigen"
     fi
-    "$ground_python" -m pip install --no-cache-dir --no-build-isolation --no-deps "$ground_nksr/package"
+    "$uv_bin" pip install --python "$ground_python" --no-build-isolation --no-deps "$ground_nksr/package"
   fi
   "$ground_python" tools/download_models.py --profile ground --directory "$ground_models"
   "$ground_python" tools/download_models.py --profile ground --directory "$ground_models" --huggingface

@@ -1,0 +1,34 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "orin-humble",
+      "displayName": "PX4 Agent 2.4.2 with installed ROS 2 Humble DDS libraries",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_PREFIX": "/usr/local",
+        "UAGENT_SUPERBUILD": "OFF",
+        "UAGENT_USE_SYSTEM_FASTDDS": "ON",
+        "UAGENT_USE_SYSTEM_FASTCDR": "ON",
+        "UAGENT_USE_SYSTEM_LOGGER": "ON",
+        "UAGENT_P2P_PROFILE": "OFF",
+        "UAGENT_BUILD_TESTS": "OFF",
+        "UAGENT_BUILD_USAGE_EXAMPLES": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "orin-humble",
+      "configurePreset": "orin-humble",
+      "jobs": 2
+    }
+  ]
+}

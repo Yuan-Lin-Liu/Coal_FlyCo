@@ -88,6 +88,8 @@ class MeshPredictOrchestrator:
         self.camera_info_received = False
         self.camera_info: Optional[CameraInfo] = None
         self.pc_sampler = PCSurfaceSampler()
+        self.pc_prediction_stage = "waiting_for_inputs"
+        self.mesh_prediction_stage = "waiting_for_pointcloud_prediction"
 
         if self.debug_dump_dir is not None:
             self.debug_dump_dir.mkdir(parents=True, exist_ok=True)
@@ -234,13 +236,16 @@ class MeshPredictOrchestrator:
 
     def run_pointcloud_prediction(self) -> Optional[Dict[str, np.ndarray]]:
         if not self.is_ready_for_pc_prediction():
+            self.pc_prediction_stage = "waiting_for_inputs"
             return None
 
+        self.pc_prediction_stage = "preparing_batch"
         t_start = time.time()
         batch, cond = self.prepare_metric_batch()
         t_batch_end = time.time()
 
         with torch.no_grad():
+            self.pc_prediction_stage = "copying_to_device"
             batch = todevice(batch, self.backend.device)
             t_device_end = time.time()
             t_pred_start = time.time()
@@ -248,9 +253,11 @@ class MeshPredictOrchestrator:
             # AMP here can downcast the pointcloud branch and crash the runtime
             # on real bag playback, so keep the official pred_pc path in fp32.
             with autocast(enabled=False):
+                self.pc_prediction_stage = "pointcloud_inference"
                 out = self.backend.pred_pc(batch)
             t_pred_end = time.time()
 
+            self.pc_prediction_stage = "decoding_prediction"
             pc_pred = out["pc"].detach().squeeze(0).cpu().numpy()
             up_results = out.get("up_results") or []
             pc_upsampled = out.get("pc_upsampled") if len(up_results) > 0 else None
@@ -263,6 +270,7 @@ class MeshPredictOrchestrator:
             debug_grid = build_debug_grid(batch["rgb_cond"]).astype(np.uint8)
             t_decode_end = time.time()
 
+        self.pc_prediction_stage = "postprocessing_prediction"
         cond = dict(cond)
         cond["pc_patial_cond_dense"] = pc_partial_dense
 
@@ -325,6 +333,7 @@ class MeshPredictOrchestrator:
         }
         if dump_path is not None:
             result["debug_dump_path"] = str(dump_path)
+        self.pc_prediction_stage = "complete"
         return result
 
     def build_mesh_input_from_prediction(self, cond):
@@ -342,8 +351,10 @@ class MeshPredictOrchestrator:
 
     def run_mesh_prediction(self) -> Optional[Dict[str, np.ndarray]]:
         if len(self.state.predictions) < 1:
+            self.mesh_prediction_stage = "waiting_for_pointcloud_prediction"
             return None
 
+        self.mesh_prediction_stage = "preparing_mesh_input"
         t_start = time.time()
         pred_state = self.state.predictions[-1]
         cond = pred_state.cond
@@ -357,6 +368,7 @@ class MeshPredictOrchestrator:
             used_fallback = True
         t_input_end = time.time()
 
+        self.mesh_prediction_stage = "preparing_surface"
         filtered_pc_np = self.maybe_densify_mesh_input(filtered_pc_np, pred_state)
         mesh_inputs = prepare_mesh_surface(
             filtered_pc_np, cond, self.pc_sampler, nksr_scale=self.nksr_scale
@@ -369,8 +381,10 @@ class MeshPredictOrchestrator:
         pc_final_th = (
             torch.from_numpy(pc_final_surface_test).to(self.backend.device).float()
         )
+        self.mesh_prediction_stage = "mesh_inference"
         mesh_out = self.backend.pred_mesh(pc_final_th)
         t_mesh_end = time.time()
+        self.mesh_prediction_stage = "postprocessing_mesh"
         mesh = mesh_out["mesh"]
         mesh_v = (
             mesh.v.detach().cpu().numpy()
@@ -419,14 +433,32 @@ class MeshPredictOrchestrator:
             },
         }
         self.state.last_mesh_result = dict(result)
+        self.mesh_prediction_stage = "complete"
         return result
 
 
 def format_waiting_reason(orchestrator: MeshPredictOrchestrator) -> str:
+    missing = []
     if len(orchestrator.state.image_conditions) < 3:
-        return "Waiting for enough image pose conditions..."
+        missing.append("image pose conditions")
     if len(orchestrator.state.input_pointcloud.points) < 512:
-        return "Waiting for enough accumulated point cloud samples..."
+        missing.append("accumulated point cloud samples")
     if not orchestrator.camera_info_received and orchestrator.intrinsics_mode == "camera_info":
-        return "Waiting for camera parameters..."
-    return "Waiting for prediction prerequisites..."
+        missing.append("camera parameters")
+    if missing:
+        return "Waiting for " + ", ".join(missing)
+    return "Prediction inputs ready"
+
+
+def format_prediction_status(orchestrator: MeshPredictOrchestrator) -> str:
+    return (
+        "Prediction status: "
+        f"accumulated_points={len(orchestrator.state.input_pointcloud.points)}/512 "
+        f"image_conditions={len(orchestrator.state.image_conditions)}/3 "
+        f"camera_info={'received' if orchestrator.camera_info_received else 'missing'} "
+        f"intrinsics_mode={orchestrator.intrinsics_mode} "
+        f"voxel_size={orchestrator.observation_voxel_size:.3f}m "
+        f"pc_stage={orchestrator.pc_prediction_stage} "
+        f"mesh_stage={orchestrator.mesh_prediction_stage}; "
+        + format_waiting_reason(orchestrator)
+    )

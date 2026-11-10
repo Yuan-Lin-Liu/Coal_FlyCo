@@ -4,6 +4,7 @@ set -euo pipefail
 
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 sam_root="$project_root/third_party/SAM_AD_Perception"
+uv_bin="${UV_BIN:-$project_root/.local/bin/uv}"
 sam_python="${SAM_AD_PYTHON:-/usr/bin/python3.10}"
 sam_cuda="${CUDA_HOME:-/usr/local/cuda-12.6}"
 sam_pip_index="${SAM_AD_PIP_INDEX_URL:-https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple}"
@@ -13,6 +14,14 @@ if [[ "$(uname -m)" != aarch64 ]] || ! grep -Eq 'R36 .*REVISION: 4\.' /etc/nv_te
   echo 'This installer requires Jetson Linux R36.4 (ARM64).' >&2
   exit 1
 fi
+if [[ ! -x "$uv_bin" ]]; then
+  echo "Project uv is missing: $uv_bin; run .local/setup/uv-install.sh first." >&2
+  exit 1
+fi
+export PATH="$project_root/.local/bin:$PATH"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$project_root/.local/uv-cache}"
+export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-$project_root/.local/uv-python}"
+export UV_SYSTEM_CERTS=true
 if [[ ! -x "$sam_cuda/bin/nvcc" ]] || ! "$sam_cuda/bin/nvcc" --version | grep -q 'release 12.6'; then
   echo 'Install CUDA 12.6 first, or set CUDA_HOME to its installation directory.' >&2
   exit 1
@@ -22,7 +31,7 @@ fi
 sudo apt-get install -y --no-install-recommends \
   python3.10-venv python3.10-dev libopenblas-dev libcudnn9-cuda-12
 if [[ ! -x "$sam_root/.venv/bin/python" ]]; then
-  "$sam_python" -m venv "$sam_root/.venv"
+  "$uv_bin" venv --python "$sam_python" "$sam_root/.venv"
 fi
 model_python="$sam_root/.venv/bin/python"
 "$model_python" -c 'import sys; assert sys.version_info[:2] == (3, 10), "Existing .venv must use Python 3.10; preserve it under another name before installing"'
@@ -47,8 +56,8 @@ PY
 
 # Bootstrap without reusing a possibly truncated HTTP cache. New pip supports
 # retrying/resuming interrupted wheel downloads in the installation below.
-"$model_python" -m pip install --index-url "$sam_pip_index" \
-  --no-cache-dir --retries 10 --upgrade 'pip>=25.2,<27' setuptools wheel
+"$uv_bin" pip install --python "$model_python" --index-url "$sam_pip_index" \
+  --retries 10 --upgrade 'pip>=25.2,<27' setuptools wheel
 # Jetson AI Lab JP6/cu126 ARM64 builds. Hashes pin these exact CUDA packages.
 sam_wheels=(
   'https://pypi.jetson-ai-lab.io/jp6/cu126/+f/62a/1beee9f2f1470/torch-2.8.0-cp310-cp310-linux_aarch64.whl#sha256=62a1beee9f2f147076a974d2942c90060c12771c94740830327cae705b2595fc'
@@ -65,8 +74,8 @@ for sam_index in "${!sam_wheels[@]}"; do
     echo "Using local wheel: $sam_wheel_dir/$sam_filename"
   fi
 done
-"$model_python" -m pip install --index-url "$sam_pip_index" \
-  --retries 10 --resume-retries 10 \
+"$uv_bin" pip install --python "$model_python" --index-url "$sam_pip_index" \
+  --retries 10 \
   --constraint "$sam_root/.venv/constraints-jetson.txt" \
   "${sam_wheels[@]}" \
   --requirement "$sam_root/.venv/requirements-jetson.txt"

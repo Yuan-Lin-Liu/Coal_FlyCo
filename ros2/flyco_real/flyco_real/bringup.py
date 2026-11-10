@@ -1,7 +1,6 @@
-"""Resolve standard installed packages; produce per-run writable solver resources."""
+"""Resolve installed packages and refresh configuration in a fixed runtime directory."""
 from pathlib import Path
 import re
-import tempfile
 import yaml
 
 
@@ -89,14 +88,17 @@ def prepare_parameters(flyco_share, libexec, hardware_file, runtime_root):
     params['sam_tracking']['camera_optical_frame'] = camera_frame
     params['sam_tracking']['airsim_camera_optical_frame'] = camera_frame
     runtime_root = Path(runtime_root).expanduser()
-    runtime_root.mkdir(parents=True, exist_ok=True)
-    run = Path(tempfile.mkdtemp(prefix='native-', dir=runtime_root))
+    run = runtime_root / 'native'
+    run.mkdir(parents=True, exist_ok=True)
     fps = run / 'fps'
     worker = fps / 'worker/build'
-    worker.mkdir(parents=True)
-    (worker / 'kdline').symlink_to(binaries / 'kdline')
+    worker.mkdir(parents=True, exist_ok=True)
+    solver_link = worker / 'kdline'
+    if solver_link.is_symlink():
+        solver_link.unlink()
+    solver_link.symlink_to(binaries / 'kdline')
     for directory in ('solver/global', 'solver/local', 'cluster'):
-        (run / directory).mkdir(parents=True)
+        (run / directory).mkdir(parents=True, exist_ok=True)
     planner = params['flyco_planner']
     planner.update({
         'hcplanner.global_solver': str(binaries),

@@ -36,6 +36,7 @@ class PerceptionBridge(Node):
         self.image_is_rectified = param('image_is_rectified', True)
         self.odin_native = param('odin_native_driver', False)
         self.odin_calibration = Path(param('odin_calibration_file',
+            # str(Path.home() / '.ros/odin_ros_driver/calib.yaml'))).expanduser() # 11-09
             str(Path.home() / '.ros/odin_ros_driver/calib.yaml'))).expanduser()
         self.camera_info = self.rectification = self.calibration_key = self.body_pose = None
         self._device_time_warned = False

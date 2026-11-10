@@ -35,6 +35,7 @@ from perception_msgs.msg import CompressMaskWithPose
 
 from mesh_predict.core.orchestrator import (
     MeshPredictOrchestrator,
+    format_prediction_status,
     format_waiting_reason,
 )
 from mesh_predict.ros.params import OfficialNodeParams
@@ -194,7 +195,16 @@ class MeshPredictNode(Node):
             self.pc_predict_timer_callback,
             callback_group=MutuallyExclusiveCallbackGroup(),
         )
+        self.prediction_status_timer = self.create_timer(
+            seconds(Duration(seconds=2)),
+            self.prediction_status_timer_callback,
+            callback_group=MutuallyExclusiveCallbackGroup(),
+        )
 
+        self.get_logger().info(
+            f"Prediction inputs: pointcloud={params.pc_topic} "
+            f"image_pose={params.img_pose_topic} text={params.text_prompt_topic}"
+        )
         if params.intrinsics_mode == "camera_info" and params.camera_info_topic:
             self.get_logger().info("Waiting for live CameraInfo on " + params.camera_info_topic)
         else:
@@ -272,6 +282,14 @@ class MeshPredictNode(Node):
         self.pending_point_messages.clear()
         self.orchestrator.append_pointcloud_messages(point_msg_list)
 
+    def prediction_status_timer_callback(self) -> None:
+        self.get_logger().info(
+            format_prediction_status(self.orchestrator)
+            + f" pending_cloud_messages={len(self.pending_point_messages)}/5"
+            + f" pending_image_messages={len(self.pending_img_pose_messages)}"
+            + f" mesh_frozen={self._mesh_frozen}"
+        )
+
     def pc_predict_timer_callback(self) -> None:
         if self._pc_prediction_running:
             self.get_logger().debug("Skipping point cloud prediction while previous run is active")
@@ -300,7 +318,7 @@ class MeshPredictNode(Node):
                 self.get_logger().warning(
                     "Pointcloud debug dump saved to %s" % (result["debug_dump_path"],)
                 )
-            self.get_logger().warning(
+            self.get_logger().info(
                 "PC predict timing total=%.3fs batch=%.3fs to_device=%.3fs infer=%.3fs decode=%.3fs post=%.3fs input_pts=%s partial_pts=%s pred_pts=%s"
                 % (
                     timings.get("total", -1.0),
@@ -322,12 +340,13 @@ class MeshPredictNode(Node):
             return
         result = self.orchestrator.run_mesh_prediction()
         if result is None:
-            self.get_logger().warning("Waiting for mesh prediction metadata...")
+            self.get_logger().debug("Waiting for mesh prediction metadata...")
             return
 
         if result["used_fallback"]:
             self.get_logger().warning(
-                "filtered point cloud is unavailable; falling back to predicted surface input"
+                "filtered point cloud is unavailable; falling back to predicted surface input",
+                once=True,
             )
         with self._mesh_update_lock:
             if self._mesh_frozen:
@@ -335,7 +354,7 @@ class MeshPredictNode(Node):
             self.outputs.publish_mesh_prediction(result)
             self._mesh_published = True
         timings = result.get("timings", {})
-        self.get_logger().warning(
+        self.get_logger().info(
             "Mesh predict timing total=%.3fs input=%.3fs surface=%.3fs pred_mesh=%.3fs post=%.3fs filtered_pts=%s partial_pts=%s surface_pts=%s vertices=%s faces=%s"
             % (
                 timings.get("total", -1.0),
@@ -350,7 +369,7 @@ class MeshPredictNode(Node):
                 timings.get("mesh_faces", "?"),
             )
         )
-        self.get_logger().warning("Mesh publish Done")
+        self.get_logger().info("Mesh publish Done")
 
     def run(self):
         spin_node(self)

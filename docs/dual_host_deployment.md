@@ -122,7 +122,25 @@ sudo apt install -y \
 
 安装 `colcon-defaults` 很关键：根目录 `colcon_defaults.yaml` 才会自动限定源码搜索路径，避免递归扫描整个第三方模型树。
 
-Jetson 上还需核对 Odin 与 `cv_bridge` 链接的是同一 OpenCV ABI；NVIDIA 预装版与 ROS apt 版混用可能在首帧图像到达时崩溃，驱动 README 的 5.10 节有排查说明。不要在不知道现有软件依赖的情况下直接替换系统 OpenCV。
+Jetson 上还需核对 Odin 与 `cv_bridge` 链接的是同一 OpenCV ABI；NVIDIA 预装版与 ROS apt 版混用可能在首帧图像到达时崩溃，驱动 README 的 5.16 节有排查说明。不要在不知道现有软件依赖的情况下直接替换系统 OpenCV。
+
+当前机载实测有 NVIDIA `libopencv-dev 4.8.0-1-g6371ee1`，其 `/usr/lib/cmake/opencv4` 配置引用了不存在的 `/usr/lib/libopencv_core.so.4.8.0`；ROS Humble 的 `libcv_bridge.so` 则链接系统 `libopencv_*.so.4.5d`。对于这一已确认的组合，选择软件源中匹配的 Ubuntu 4.5.4 开发包，并指定标准 ARM64 CMake 配置目录：
+
+```bash
+sudo apt install --allow-downgrades libopencv-dev=4.5.4+dfsg-9ubuntu4
+
+cd "$HOME/Coal_FlyCo"
+source /opt/ros/humble/setup.bash
+export OpenCV_DIR=/usr/lib/aarch64-linux-gnu/cmake/opencv4
+export CMAKE_PREFIX_PATH="$PWD/.local/deploy/embree3${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+export LD_LIBRARY_PATH="$PWD/.local/deploy/embree3/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+test -f "$OpenCV_DIR/OpenCVConfig.cmake" &&
+colcon build --packages-skip-build-finished --cmake-clean-cache &&
+source install/setup.bash
+```
+
+`--packages-skip-build-finished` 保留已成功构建的包，继续处理失败及尚未构建的包；`--cmake-clean-cache` 清除其中失败的 CMake 路径选择。其他机器须先核对 `apt-cache policy libopencv-dev libopencv-core-dev` 与 `ldd /opt/ros/humble/lib/libcv_bridge.so`，再选择版本。
 
 ### 3.3 创建车辆配置
 
@@ -153,7 +171,7 @@ Odin 内部的相机内参、去畸变和传感器间 TF 由原驱动处理。�
 
 工程的 ARM 构建要求 Embree **3**。Ubuntu 22.04 的 `libembree-dev` 官方包仅提供 amd64，不能把该包或仓库内的 x86 `.so` 复制到 Orin；Ubuntu 24.04 提供的 Embree 4 也不满足本工程的 `find_package(embree 3 ...)`。[Ubuntu 包信息](https://packages.ubuntu.com/libembree-dev)。
 
-以下是按上游 3.13.5 的 ARM/NEON CMake 选项整理的目标机编译命令，尚待 Orin 构建验收：
+Linux ARM64 构建须显式设置 `EMBREE_ARM=ON`。3.13.5 在加载 GNU 编译选项之后才自动检测 NEON，仅指定 `EMBREE_MAX_ISA=NEON` 可能留下 x86 的 `-msse2` 编译参数。GCC 11 编译该版本的 NEON 兼容头文件还需 `-flax-vector-conversions`；同时关闭 `EMBREE_IGNORE_CMAKE_CXX_FLAGS`，避免 Embree 清空传入的 C++ 选项。以下命令仍需在 Orin 上完成编译验收：
 
 ```bash
 cd "$HOME/Coal_FlyCo"
@@ -163,15 +181,22 @@ git clone --branch v3.13.5 --depth 1 \
 cmake -S .local/deploy/src/embree -B .local/deploy/build/embree -GNinja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$PWD/.local/deploy/embree3" \
+  -DEMBREE_ARM=ON \
+  -DEMBREE_IGNORE_CMAKE_CXX_FLAGS=OFF \
+  -DCMAKE_CXX_FLAGS=-flax-vector-conversions \
   -DEMBREE_ISPC_SUPPORT=OFF -DEMBREE_TUTORIALS=OFF \
-  -DEMBREE_MAX_ISA=NEON
-cmake --build .local/deploy/build/embree --parallel 2
+  -DEMBREE_MAX_ISA=NEON &&
+cmake --build .local/deploy/build/embree --parallel 2 &&
 cmake --install .local/deploy/build/embree
 export CMAKE_PREFIX_PATH="$PWD/.local/deploy/embree3${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
 export LD_LIBRARY_PATH="$PWD/.local/deploy/embree3/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 ```
 
 已经有本机 ARM64 Embree 3 时复用其安装前缀，无需重新构建。[上游版本与 ARM 检测](https://github.com/RenderKit/embree/blob/v3.13.5/CMakeLists.txt)。
+
+若已有失败配置并报 `unrecognized command-line option '-msse2'`，复用源码和构建目录，以 `cmake -U 'FLAGS_*'` 加上述完整配置参数重新配置，再在构建成功后执行安装。
+
+若报 `cannot convert int64x2_t to __m128i` 或其他 NEON 向量转换错误，核对实际编译命令是否包含 `-flax-vector-conversions`；仅设置 `CMAKE_CXX_FLAGS` 而不关闭 `EMBREE_IGNORE_CMAKE_CXX_FLAGS` 不会生效。参见 [NVIDIA 对 GCC 向量转换选项的说明](https://github.com/NVIDIA/grace-cpu-benchmarking-guide/blob/main/src/developer/vectorization.md#relaxed-vector-conversions)。
 
 ### 4.2 编译 ROS 工作区
 
@@ -202,21 +227,33 @@ sudo udevadm trigger
 
 ### 4.4 安装 DDS Agent
 
-已有与固件匹配且正常工作的 Agent 时复用。以下安装版本来自 PX4 v1.16 官方部署示例；本次定制 PX4 1.17 已连接现有 UDP Agent，继续复用现有安装：
+当前 Orin 尚未安装 Agent。其已有源码使用 Fast DDS `3.3.x`，属于 v3 Agent 构建；PX4 v1.17 官方说明默认 v2 客户端与 v3 Agent 不兼容。ROS2 Humble 复用系统 DDS 库时采用官方对应的 Agent `v2.4.2`。已有与固件匹配且正常工作的 Agent 时继续复用。
+
+本地已准备 `runtime/deploy/Micro-XRCE-DDS-Agent-2.4.2-humble-src.tar.gz`，包含官方 v2.4.2 源码及 `config/xrce_agent_humble_presets.json` 对应的构建配置。该包不包含编译产物；配置复用 Humble 的 Fast DDS 2.x、Fast CDR 1.x 和系统 spdlog，关闭 superbuild 及无需用于 PX4 UDP/串口链路的 Agent P2P 配置，从而避免构建过程再次访问 GitHub。
+
+地面电脑发送：
 
 ```bash
 cd "$HOME/Coal_FlyCo"
-git clone --branch v2.4.3 --depth 1 \
-  https://github.com/eProsima/Micro-XRCE-DDS-Agent.git .local/deploy/src/Micro-XRCE-DDS-Agent
-cmake -S .local/deploy/src/Micro-XRCE-DDS-Agent \
-  -B .local/deploy/build/xrce-agent -GNinja -DCMAKE_BUILD_TYPE=Release
-cmake --build .local/deploy/build/xrce-agent --parallel 2
-sudo cmake --install .local/deploy/build/xrce-agent
+scp runtime/deploy/Micro-XRCE-DDS-Agent-2.4.2-humble-src.tar.gz \
+  buaa-lab-01@192.168.8.204:~/
+```
+
+Orin 安装匹配的开发依赖，解压到独立源码目录后编译：
+
+```bash
+sudo apt install -y ros-humble-fastrtps ros-humble-fastcdr libspdlog-dev
+tar -xzf "$HOME/Micro-XRCE-DDS-Agent-2.4.2-humble-src.tar.gz" -C "$HOME"
+cd "$HOME/Micro-XRCE-DDS-Agent-2.4.2-humble"
+source /opt/ros/humble/setup.bash
+cmake --preset orin-humble &&
+cmake --build --preset orin-humble &&
+sudo cmake --install build &&
 sudo ldconfig
 command -v MicroXRCEAgent
 ```
 
-固件版本不同先核对客户端/Agent 兼容关系，不直接安装最新 Agent。[PX4 Agent 安装说明](https://docs.px4.io/v1.16/en/ros2/user_guide#setup-micro-xrce-dds-agent-client)。
+上述配置与编译已在本地 x86_64 Humble 完成验证，ARM64 编译及飞控连接仍由机载验证。旧的 `~/Micro-XRCE-DDS-Agent` 目录保留，源码与失败构建不混用。[PX4 v1.17 Agent 安装与版本对应表](https://docs.px4.io/v1.17/en/middleware/uxrce_dds#micro-xrce-dds-agent-installation)。
 
 ### 4.5 准备语义模型服务
 
@@ -228,45 +265,46 @@ command -v MicroXRCEAgent
 
 ```bash
 cd "$HOME/Coal_FlyCo"
-export SEMANTIC_PYTHON=/absolute/path/to/jetson-semantic-env/bin/python
+export PATH="$PWD/.local/bin:$PATH"
+export UV_CACHE_DIR="$PWD/.local/uv-cache" UV_PYTHON_INSTALL_DIR="$PWD/.local/uv-python"
+uv venv --python 3.12 .local/deploy/semantic
+export SEMANTIC_PYTHON="$PWD/.local/deploy/semantic/bin/python"
 "$SEMANTIC_PYTHON" -c 'import sys, torch, torchvision; print(sys.version, torch.__version__, torchvision.__version__, torch.version.cuda); assert sys.version_info >= (3, 12); assert torch.cuda.is_available()'
-"$SEMANTIC_PYTHON" -m pip install -r third_party/SAM_AD_Perception/requirements-server.txt
+uv pip install --python "$SEMANTIC_PYTHON" -r third_party/SAM_AD_Perception/requirements-server.txt
 cd third_party/SAM_AD_Perception
 "$SEMANTIC_PYTHON" -B prepare_assets.py --backend A
-"$SEMANTIC_PYTHON" -B -m sam_ad.doctor --backend A
+PYTHONPATH="$PWD:$PWD/sam2-official:$PWD/third_party/efficientsam3" \
+  "$SEMANTIC_PYTHON" -B -m sam_ad.doctor --backend A --skip-integrity
 ```
 
-`doctor` 同时检查 CUDA tensor、torchvision GPU NMS 和模型资产完整性。仍需在第 8 节发送真实目标文字，验证端到端推理与时延。权重及锁定的上游源码可以从远程已验证机器按原路径复制，Python 虚拟环境及二进制扩展需要针对本机建立。
+`doctor` 检查 CUDA tensor 和 torchvision GPU NMS；本次部署跳过文件哈希校验。仍需在第 8 节发送真实目标文字，验证端到端推理与时延。权重及锁定的上游源码可以从远程已验证机器按原路径复制，Python 虚拟环境及二进制扩展需要针对本机建立。
 
 #### 地面电脑运行 SAM2，Orin 远程调用
 
-Ubuntu 22.04 默认没有 Python 3.12。地面电脑先安装并创建语义环境：
-
-```bash
-sudo apt update
-sudo apt install -y software-properties-common
-sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt update
-sudo apt install -y python3.12 python3.12-venv python3.12-dev
-
-cd "$HOME/Coal_FlyCo/third_party/SAM_AD_Perception"
-export SAM_AD_PYTHON=python3.12
-bash setup_linux.sh A
-```
-
-地面电脑启动可被局域网访问的服务。先用 `ip -br -4 addr` 查出地面电脑在本机网段的地址：
+地面电脑使用项目内 `uv` 环境；完成第 4.5 节的依赖准备后，从工程根目录启动：
 
 ```bash
 cd "$HOME/Coal_FlyCo"
-ros2 launch flyco_real semantic.launch.py \
-  bind:=0.0.0.0 \
-  python:="$HOME/Coal_FlyCo/third_party/SAM_AD_Perception/.venv/bin/python"
+source .local/setup/ground-env.sh
+source .local/deploy/semantic.env
+ros2 launch flyco_real semantic.launch.py
+```
+
+该 ROS2 launch 默认使用 `.local/deploy/semantic/bin/python`、监听地址 `0.0.0.0`、端口 `8851`，并跳过文件哈希校验。地面服务与机载客户端均加载相同的 `semantic.env` 鉴权配置。先用 `ip -br -4 addr` 查出地面电脑在本机网段的地址：
+
+```bash
+source .local/deploy/semantic.env
+curl --noproxy "*" -sS \
+  -H "Authorization: Bearer ${SAM_AD_API_TOKEN}" \
+  "http://127.0.0.1:8851/health"
 ```
 
 服务就绪后，在 Orin 上验证（将 `GROUND_IP` 换成地面电脑 IP）：
 
 ```bash
-curl --noproxy "*" -sS "http://${GROUND_IP}:8851/health"
+curl --noproxy "*" -sS \
+  -H "Authorization: Bearer ${SAM_AD_API_TOKEN}" \
+  "http://${GROUND_IP}:8851/health"
 ```
 
 Orin 的跟踪入口通过启动参数指定远程服务，不需要在 Orin 再启动一份语义服务：
@@ -300,17 +338,15 @@ source install/setup.bash
 
 ### 5.2 安装地面预测环境
 
-`colcon build` 只构建 ROS 包，不会创建预测 Python 环境或下载模型。新 x86_64 地面电脑可在已完成 ROS 构建后执行：
+`colcon build` 只构建 ROS 包，不会创建预测 Python 环境或下载模型。项目使用 `.local/bin/uv` 管理 Python 环境；新 x86_64 地面电脑可在已完成 ROS 构建后执行：
 
 ```bash
 bash tools/setup_ground_predictor.sh
-# 之后只检查环境和资源，不重新下载：
-bash tools/setup_ground_predictor.sh --check
 ```
 
 脚本将环境安装到 `.local/deploy/predictor`，只下载地面预测需要的模型；缺少 CUDA 11.8 时在 `.local/deploy/cuda-root/usr/local/cuda-11.8` 解包所需编译工具和 cuSPARSE，不安装或替换系统驱动，不设置 ROS 域。首次安装需要联网、GPU 可用以及编译工具。在没有系统 CUDA 11.8、采用此项目内安装时，后面的地面 launch 使用 `cuda_home:="$PWD/.local/deploy/cuda-root/usr/local/cuda-11.8"`。
 
-下面保留分步安装方式，便于已有环境的机器按需复用。
+下面保留分步安装方式，便于已有环境的机器按需复用；环境创建和依赖安装仍使用 `uv`。
 
 已有能运行本工程的 Python 3.10 / Torch 2.3.1 / CUDA 11.8 / NKSR 环境时可直接复用路径；只需验证下面的导入。全新 x86_64 电脑先保证 NVIDIA 驱动工作且有 CUDA 11.8 的 `nvcc`。CUDA 11.8 安装说明见 [NVIDIA 文档](https://docs.nvidia.com/cuda/archive/11.8.0/cuda-installation-guide-linux/index.html)。
 
@@ -331,17 +367,19 @@ RTX 3090/4090 的环境可参考本工程已有验证组合；如果是更新且
 ```bash
 cd "$HOME/Coal_FlyCo"
 mkdir -p .local/deploy/src
-python3 -m venv --system-site-packages .local/deploy/predictor
+export PATH="$PWD/.local/bin:$PATH"
+export UV_CACHE_DIR="$PWD/.local/uv-cache" UV_PYTHON_INSTALL_DIR="$PWD/.local/uv-python"
+uv venv --python /usr/bin/python3 --system-site-packages .local/deploy/predictor
 export PREDICTOR_PYTHON="$PWD/.local/deploy/predictor/bin/python"
 export CUDA_HOME=/usr/local/cuda-11.8
 export PATH="$CUDA_HOME/bin:$PATH"
 export LD_LIBRARY_PATH="$CUDA_HOME/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export CC=gcc-11 CXX=g++-11 MAX_JOBS=2
-"$PREDICTOR_PYTHON" -m pip install 'pip<25' setuptools==69.5.1 wheel
-"$PREDICTOR_PYTHON" -m pip install torch==2.3.1 torchvision==0.18.1 \
+uv pip install --python "$PREDICTOR_PYTHON" 'pip<25' setuptools==69.5.1 wheel
+uv pip install --python "$PREDICTOR_PYTHON" torch==2.3.1 torchvision==0.18.1 \
   --index-url https://download.pytorch.org/whl/cu118
-"$PREDICTOR_PYTHON" -m pip install -r docker/requirements.txt
-"$PREDICTOR_PYTHON" -m pip install --no-index --no-deps \
+uv pip install --python "$PREDICTOR_PYTHON" -r docker/requirements.txt
+uv pip install --python "$PREDICTOR_PYTHON" --no-index --no-deps \
   -f https://data.pyg.org/whl/torch-2.3.0+cu118.html torch-scatter==2.1.2+pt23cu118
 "$PREDICTOR_PYTHON" -c 'import torch; assert torch.cuda.is_available(); print(torch.cuda.get_device_name(), torch.cuda.get_device_capability())'
 ```
@@ -361,7 +399,7 @@ git -C .local/deploy/src/NKSR/package/external/openvdb fetch --depth 1 origin \
 git -C .local/deploy/src/NKSR/package/external/openvdb checkout FETCH_HEAD
 git clone --depth 1 --branch 3.4 https://gitlab.com/libeigen/eigen.git \
   .local/deploy/src/NKSR/package/external/eigen
-"$PREDICTOR_PYTHON" -m pip install --no-build-isolation .local/deploy/src/NKSR/package
+uv pip install --python "$PREDICTOR_PYTHON" --no-build-isolation .local/deploy/src/NKSR/package
 ```
 
 准备权重并首次编译 PointNet2 扩展：
@@ -369,7 +407,6 @@ git clone --depth 1 --branch 3.4 https://gitlab.com/libeigen/eigen.git \
 ```bash
 "$PREDICTOR_PYTHON" tools/download_models.py --directory "$PWD/.local/flyco/models"
 "$PREDICTOR_PYTHON" tools/download_models.py --directory "$PWD/.local/flyco/models" --huggingface
-"$PREDICTOR_PYTHON" tools/download_models.py --directory "$PWD/.local/flyco/models" --check
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 export TORCH_EXTENSIONS_DIR="$PWD/.local/deploy/torch_extensions"
@@ -392,7 +429,7 @@ QGC 通过数传、独立串口或已配置的 MAVLink UDP 连接真机。独立
 
 ## 6. 双机网络、时间与每个终端环境
 
-以下采用 DDS 域 **0** 作为新部署示例；已有通畅网络时沿用原域，并统一修改两端环境与飞控 `UXRCE_DDS_DOM_ID`。`config/odin.yaml` 的 `deployment.ros_domain_id` 是配置记录，当前 launch 不会据此自动设置终端环境。
+当前 Orin 机载电脑地址为 **192.168.8.204**，DDS 域为 **3**，地面电脑地址为 **192.168.8.181**。两端运行终端使用同一域。`deployment.ros_domain_id` 是配置记录，当前 launch 不会据此自动设置终端环境。
 
 每个运行终端都先执行：
 
@@ -400,10 +437,43 @@ QGC 通过数传、独立串口或已配置的 MAVLink UDP 连接真机。独立
 cd "$HOME/Coal_FlyCo"
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-export ROS_DOMAIN_ID=66
+export ROS_DOMAIN_ID=3
+export ROS_LOCALHOST_ONLY=0
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ```
 
-当前实机 PX4 的 DDS 域为 66，两端节点均使用该域。本工程已包含配套消息定义，运行终端仅加载本工程环境。
+本地 `.local/setup/ground-env.sh` 和 Fast DDS 配置已按上述机载地址与域配置。接入 PX4 时还需核对飞控 `UXRCE_DDS_DOM_ID`，使其与 ROS 节点使用同一域。本工程已包含配套消息定义，运行终端仅加载本工程环境。
+
+终端中的 `export` 对当前终端及其子进程生效。要让机载每个新 Bash 终端自动加载，使用 `config/onboard.env`；文件按自身位置确定工程根目录，加载 ROS2、工程覆盖层、Domain 3、机载 DDS XML、Embree 路径和已有的 `.local/deploy/semantic.env`。它只配置环境，不启动节点。
+
+在地面电脑同步配置：
+
+```bash
+cd "$HOME/Coal_FlyCo"
+scp config/onboard.env \
+  buaa-lab-01@192.168.8.204:~/Coal_FlyCo/config/
+scp .local/deploy/fastdds-orin.xml \
+  buaa-lab-01@192.168.8.204:~/Coal_FlyCo/.local/deploy/
+```
+
+在 Orin 上执行一次，之后新终端及重启后的终端自动加载：
+
+```bash
+flyco_env_line='source "$HOME/Coal_FlyCo/config/onboard.env"'
+grep -qxF "$flyco_env_line" "$HOME/.bashrc" ||
+  printf '\n%s\n' "$flyco_env_line" >> "$HOME/.bashrc"
+unset flyco_env_line
+source "$HOME/Coal_FlyCo/config/onboard.env"
+printenv ROS_DOMAIN_ID ROS_LOCALHOST_ONLY RMW_IMPLEMENTATION FASTRTPS_DEFAULT_PROFILES_FILE
+```
+
+此方式适用于该用户终端启动的节点；systemd 服务需要在服务定义中加载环境。DDS XML 文件和 `/etc/systemd/timesyncd.conf.d/99-flyco-ntp.conf` 本身是持久文件。Wi-Fi IP 地址的固定由网络配置负责，建议在路由器上将机载 MAC 保留为 `192.168.8.204`，地面电脑保留为 `192.168.8.181`。
+
+DDS XML 是可选配置，用于限定网卡和指定发现对端。两台电脑处于允许 DDS 组播的同一局域网时，可以使用默认发现。环境入口在 XML 不存在时清除文件变量，保留 Domain 3 和 Fast DDS RMW；当前终端也可执行 `unset FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE` 后再启动节点。已存在的 XML 会继续加载。
+
+机载独立启动 Odin 原始驱动时，本地接收入口使用 `start_driver:=false`。将该设备的标定文件复制到本地，在 `config/vehicle.odin.local.yaml` 的 `perception_bridge.ros__parameters.odin_calibration_file` 中指定固定路径，当前为 `/home/pq/.ros/odin_ros_driver/calib.yaml`。该文件不会通过 DDS 自动同步；本地启动驱动的模式仍由启动入口指定本次运行的标定目录。
+
+运行配置统一生成到固定的 `runtime_root/native/`，重复启动时覆盖 `parameters.yaml`、`prediction_runtime.yaml`，硬件入口还会覆盖 `odin_control.yaml`。`hardware.launch.py`、`native.launch.py` 的默认目录为 `~/.ros/coal-flyco/native/`；`ground.launch.py` 在当前本地环境下使用 `.local/deploy/runs/native/`。修改参数仍编辑源车辆 YAML，生成文件会在下次启动时被覆盖。已有 `odin/calib.yaml` 会保留，旧的 `native-随机字符/` 目录不再创建，也不会自动删除。
 
 Orin 再加载本机 Embree 前缀；地面再设置预测扩展缓存：
 
@@ -487,10 +557,10 @@ ros2 launch flyco_real agent.launch.py transport:=udp4 port:=8888
 ### 8.2 Orin B：Odin 定位、标定与传感器桥
 
 ```bash
-ros2 launch flyco_real odin.launch.py config:="$PWD/config/vehicle.odin.local.yaml"
+ros2 launch flyco_real hardware.launch.py
 ```
 
-该入口已经包含传感器桥、相机视锥和零偏 `base_link -> camera_0` TF。不要再启动会重复创建这些节点的组合入口。先确认 `/flyco/odom` 以及 PX4 的本地位置估计正常。
+该入口默认 `role=sensors`、`start_driver=true`、`start_odometry=true`，车辆配置为 `COAL_FLYCO_ROOT/config/vehicle.odin.local.yaml`；未设置工程根环境变量时使用 `~/Coal_FlyCo`。`odometry_config` 仍使用 `ros2_px4_odometry` 包内的 `config/odin_config.yaml`，与车辆配置分开。入口包含 Odin 驱动、里程计转发、传感器桥和相机视锥，相机姿态使用 Odin 原生 `camera_0` TF。先确认 `/flyco/odom` 以及 PX4 的本地位置估计正常。
 
 ### 8.3 语义推理服务
 
@@ -519,6 +589,7 @@ ros2 run flyco_real check_semantic.py \
 ### 8.4 地面 A：预测、RViz 与心跳
 
 ```bash
+source .local/setup/ground-env.sh
 ros2 launch flyco_real ground.launch.py \
   project_root:="$PWD" \
   config:="$PWD/config/vehicle.odin.local.yaml" \
@@ -526,8 +597,11 @@ ros2 launch flyco_real ground.launch.py \
   models_dir:="$PWD/.local/flyco/models" \
   cuda_home:="$PWD/.local/deploy/cuda-root/usr/local/cuda-11.8" \
   cache_dir:="$PWD/.local/deploy/torch_extensions" \
+  runtime_root:="$PWD/runtime/ground/runs" \
   start_semantic:=false rviz:=true
 ```
+
+地面入口必须先加载 `ground-env.sh`；它会加载 `uv` 环境、禁用用户 site-packages，并将 ROS 日志写入工程目录，避免系统 SciPy 与用户目录 NumPy 发生 ABI 冲突。
 
 上述 CUDA 路径对应第 5 节的一键安装脚本；如使用自行安装的完整 CUDA，则将 `cuda_home` 改为实际目录。也可以省略该参数，由启动文件在配置路径不可用时查找项目内 CUDA。不要传入不存在的 `/usr/local/cuda-11.8`。
 
@@ -561,7 +635,11 @@ ros2 run flyco_real task.py enable
 ### 8.6 Orin：合并注册、解锁后启动机载算法与任务节点
 
 ```bash
-ros2 launch flyco_real flyco.launch.py config:="$PWD/config/vehicle.odin.local.yaml"
+ros2 launch flyco_real flyco.launch.py \
+  config:="$PWD/config/vehicle.odin.local.yaml" \
+  start_semantic:=false \
+  segmentation_endpoint:=http://192.168.8.181:8851 \
+  segmentation_timeout:=15.0
 ```
 
 该入口复用已有定位桥，立即启动模式注册和控制桥。选择 FlyCo 并正常解锁后，自动启动规划、轨迹服务器、目标跟踪/聚类和任务调度；初始化完成输出 `FlyCo ready`。不要同时运行另一份模式注册节点；若继续复用上一节的独立模式节点，给命令增加 `start_mode:=false`。
@@ -587,6 +665,92 @@ ros2 topic list -t | rg '/fmu/|/flyco/|/prediction/'
 ```
 
 对 PX4 输出使用 `ros2 topic echo <实际话题名> --qos-reliability best_effort --once`，避免默认 QoS 不匹配导致误判“没有数据”。模式状态优先查看 `registered_mode_id`、`registration_issue`、`px4_ok`、`odom_ok`、`ground_ok`、`enabled` 和 `reason`。地面执行相同诊断应能看到 Orin 的数据。
+
+### 8.8 本机 Odin + FlyCo 简化测试（无 PX4）
+
+将 Odin 相机直接接到本机时，可以关闭 `odom_to_px4_node`，只保留 Odin 驱动、感知桥、相机 TF 和 FlyCo 跟踪链。每个终端先执行：
+
+```bash
+cd "$HOME/Coal_FlyCo"
+source .local/setup/ground-env.sh
+```
+
+终端 A 启动本地语义服务：
+
+```bash
+ros2 launch flyco_real semantic.launch.py
+```
+
+终端 B 启动 Odin 输入链；`start_odometry:=false` 表示不启动 PX4 里程计转发节点：
+
+```bash
+ros2 launch flyco_real odin.launch.py \
+  config:="$PWD/config/vehicle.odin.local.yaml" \
+  start_odometry:=false
+```
+
+终端 C 启动 FlyCo 跟踪和文本适配器，不启动 PX4 模式注册：
+
+```bash
+ros2 launch flyco_real native.launch.py \
+  role:=onboard \
+  config:="$PWD/config/vehicle.odin.local.yaml" \
+  start_sensors:=false \
+  start_mode:=false \
+  segmentation_endpoint:=http://127.0.0.1:8851 \
+  segmentation_timeout:=15.0
+```
+
+终端 D 发送文本：
+
+```bash
+ros2 topic pub --once /query_text std_msgs/msg/String \
+  "{data: '一个煤堆'}"
+```
+
+也可以使用任务命令发送文本：
+
+```bash
+ros2 run flyco_real task.py text 'A single large pile of black coal.'
+```
+
+观察本地输出：
+
+```bash
+ros2 topic list -t
+ros2 topic hz /flyco/odom
+ros2 topic hz /flyco/lidar/world
+ros2 topic hz /flyco/camera/rgb
+ros2 topic echo /tracking/target_pc --once
+ros2 topic echo /tracking/pose --once
+```
+
+如果还要运行地面网格预测和 RViz2，另开终端执行第 8.4 节的 `ground.launch.py`。地面预测沿用源码的目标点云接口 `/tracking/target_pc`，图像与位姿来自 `/sam_tracking/compress_mask_and_transform`，相机内参来自 `/flyco/camera/info`。
+
+预测节点每两秒以 INFO 级别向终端输出 `Prediction status:`，显示累计点数、图像条件数、相机内参状态、处理阶段和等待原因。点云与网格预测的耗时、输入输出点数、顶点数和面数，以及 `Mesh publish Done` 也以 INFO 级别输出，无需额外打开 DEBUG。日志中的 `accumulated_points=173/512` 表示累计、体素降采样后的点数为 173，尚未满足源码的 512 点门槛；它不是跟踪日志里的单帧 `points count`，同一区域的重复观测不会按帧数相加。Odin 模板和本地车辆配置均恢复原有的 `observation_voxel_size: 0.6`，单位是米。
+
+本机现已撤回额外的三维前景筛选及可调点数门槛，恢复源码的点云投影、累计、模型预处理与推理接口。预测仍要求至少三帧图像条件、至少 512 个累计点，并在 `camera_info` 模式下收到相机内参。改变车辆配置不会更新已运行节点；恢复后需重启跟踪/聚类和地面预测进程，清空之前的状态，再通过 UI 发送目标文字。
+
+聚类恢复 `third_party/flyco_ros2/config/flyco.yaml` 的默认值：`cluster_tolerance: 1.0`、`resolution: 0.2`、`min_cluster_size: 300`、`target_refine_radius: 20.0`。Odin 坐标适配使用原车辆模板的 `min_height: 0.25`。同步队列 `sync_queue_size: 50` 保留为实测所需的传感器同步修复。UI 文本仍由 `/query_text` 经 PromptAdapter 转发到 `/tracking/prompt/text`，车辆配置将预测节点的文本订阅映射到该话题，模型自身的默认文本接口保持不变。语义 HTTP 服务和 Odin 驱动无需随跟踪、预测进程一起重启。
+
+- `image_conditions=2/3`：已缓存两帧图像与位姿，尚未满足三帧门槛。
+- `camera_info=missing`：尚未收到相机内参；`intrinsics_mode=camera_info` 时会阻止预测。
+- `pending_cloud_messages=2/5`：点云接收队列有两条消息，凑齐五条后取最近三条加入累计点云；队列处理后归零是正常现象。
+- `pc_stage=preparing_batch` / `pointcloud_inference`：分别表示点云模型预处理 / 调用点云模型。
+- `mesh_stage=preparing_surface` / `mesh_inference`：分别表示网格输入表面处理 / 调用网格模型。
+- `mesh_frozen=True`：已达到覆盖率条件，暂停网格更新。
+
+日志末尾会同时列出未满足的输入条件。`PC predict timing ... input_pts=... infer=...` 说明一次点云预测已完成，`Mesh publish Done` 说明网格已完成并发布；仅出现 `MeshPredictNode Init Done` 只代表节点初始化完成。
+
+如果图像条件和相机内参都已满足，但累计点数持续为零，先检查 `/tracking/target_pc` 是否实际发出消息。`/tracking/target_pointcloud` 是 mask 选择的激光点，经过高度过滤后形成 `/tracking/guider_pc`，再由聚类节点结合 `/flyco/lidar/world` 输出 `/tracking/target_pc`。预测和规划均使用聚类后的目标点云；跟踪日志的 `points count` 不等于预测累计输入点数。RViz2 的绿色 `Mask-selected points` 可单独观察聚类前的 mask 点云。
+
+Odin 配置在 `sam_tracking_node.ros__parameters` 下设置 `sync_queue_size: 50`，用于缓存点云和里程计的时间同步消息。50 Hz 里程计使用 5 条缓存时仅覆盖约 0.1 秒，点云传输与转换延迟可能使聚类一直无法获得同步对；此时会有 guide 输入日志，却没有 `Cluster backend=...` 日志。修改同步队列后需重启 `native.launch.py role:=onboard`，不需要重启语义服务或重新编译。启用聚类诊断日志后，应能观察到 `Cluster backend=...` 和 `cluster output stats: target{n=...}`。
+
+`direction_points: empty` 表示当前帧选中点经过 `min_height` 过滤后为空。该阈值比较的是 `world` 坐标的 z，而不是相对地面的高度；本地相机测试应结合 `tracking selected_points_world` 的 z 统计核对阈值，不能仅根据原始 mask 点数认定已有有效 guide。
+
+RViz2 的 `Semantic Perception Image` 使用 `/tracking/mask/image`，显示跟踪节点发布的 RGB 分割结果。语义 HTTP 服务本身不发布 ROS 图像；`/perception/segmentation/overlay` 没有发布者。已打开的 RViz2 可以直接修改该显示项的 Topic，无需重启模型服务。
+
+预测网格尺寸异常时，应先比较 `/tracking/target_pointcloud`、`/tracking/target_pc`、`/mesh_pred/partial_pc` 和 `/prediction/mesh_vis` 的空间范围。二维 mask 中的稀疏激光点可能同时包含目标表面和后方背景，默认 `cluster_tolerance=1.0`、`target_refine_radius=20.0` 也可能把很大的背景区域保留在目标聚类内。预测输入按这些点的包围盒中心和最大半径归一化，再按同一尺度还原；背景会直接影响输出尺寸。减小预测体素只提高保留点的密度，不能替代三维前景分离。椅子联调中曾测得目标聚类约为 8×18.7×2.1 米，而原始 mask 点云内可分出约 1.08×0.57×1.09 米的近处簇；此时应先排除背景，不应通过修改 RViz Marker 的缩放比例掩盖输入问题。
 
 ## 9. 从联调到任务操作
 
@@ -620,3 +784,56 @@ ros2 run flyco_real task.py status
 3. 飞控接线与参数、双机网卡和时间源；这些信息决定通信、域、融合和运行配置。Odin 当前按零安装偏移使用。
 
 上述条件确认后，第 8 节就是日常双机启动顺序；无需再启动仿真管理器。
+
+## 11. 地面直接订阅 Odin 图像进行二维分割
+
+本节用于先验证地面分割。机载保持 `hardware.launch.py role:=sensors` 运行，地面直接订阅 `/odin1/image` 和 UI 的 `/query_text`，无需机载分割请求、HTTP 服务、PX4 模式注册、CameraInfo、里程计或 TF。两侧 ROS 域应一致；当前联调使用 `66`。图像话题必须在地面实际可接收。
+
+地面新增入口复用 `.local/deploy/semantic` 的 uv Python 3.12 环境和已有 SAM_AD_Perception 后端 A；ROS Python 3.10 节点与模型进程通过本机管道通信。此入口不调用模型清单/哈希校验，也不启动预测模型。若旧 `semantic.launch.py` 模型服务仍运行，先在其终端按 Ctrl+C 释放该模型实例，再启动新入口。
+
+本地已更新安装后，运行：
+
+```bash
+cd ~/Coal_FlyCo
+source .local/setup/ground-env.sh
+ros2 launch flyco_real segmentation.launch.py
+```
+
+默认同时打开文字 UI 和 RViz2。输入目标文字并按 Enter 发送；也可在另一个已加载相同 ROS 环境的终端执行：
+
+```bash
+ros2 topic pub --once /query_text std_msgs/msg/String "{data: 'a gray chair'}"
+```
+
+可编辑默认配置为 `ros2/flyco_real/config/segmentation.yaml`。常用覆盖方式：
+
+```bash
+# 改用桥接校正后的图像；后续三维接入应使用与内参一致的图像。
+ros2 launch flyco_real segmentation.launch.py image_topic:=/flyco/camera/rgb
+
+# 无窗口运行，启动时指定目标。
+ros2 launch flyco_real segmentation.launch.py ui:=false rviz:=false text:="a gray chair"
+
+# 通过原有地面入口仅运行二维分割。
+ros2 launch flyco_real ground.launch.py segmentation_only:=true rviz:=true
+```
+
+输出话题：
+
+| 话题 | 内容 |
+| --- | --- |
+| `/perception/segmentation/mask` | `mono8` 二值 mask，尺寸与输入图像一致 |
+| `/perception/segmentation/overlay` | 原图叠加绿色前景，供 RViz2 显示 |
+| `/perception/segmentation/status` | JSON 状态，包括收到图像数、模型调用数、发布数、mask 像素数和推理耗时 |
+
+mask 和叠加图保留输入图像的时间戳与 frame_id。文字切换会使旧任务的在途结果失效；推理忙时只保留最新待处理图像。默认最大推理频率为 2 Hz。
+
+终端每两秒打印状态，也可读取：
+
+```bash
+ros2 topic echo /perception/segmentation/status --once
+```
+
+`loading_model` 表示正在加载模型；`waiting_for_text` 表示等待目标文字；`images_received=0` 表示尚未收到图像；`no_target` 表示本帧没有可靠目标 mask。模型加载或进程通信失败会输出具体错误并退出。日志只用于查看新增链路，不代表已完成真实图像的分割精度验证。
+
+本轮尚未适配机载消费此 mask，原有机载三维跟踪/规划不会自动切换到新话题。纯二维验证时使用本节的专用 RViz2 配置，不要同时启动旧的机载分割请求节点，以免两个节点发布同名 mask 话题。

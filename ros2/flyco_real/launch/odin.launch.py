@@ -13,6 +13,8 @@ def generate_launch_description():
         DeclareLaunchArgument('config', default_value=str(share/'config/odin.yaml')),
         DeclareLaunchArgument('odometry_config', default_value=str(
             Path(get_package_share_directory('ros2_px4_odometry'))/'config/odin_config.yaml')),
+        DeclareLaunchArgument('start_odometry', default_value='true'),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share/'launch/hardware.launch.py')),
             launch_arguments={'role': 'sensors', 'config': LaunchConfiguration('config'),
-                              'odometry_config': LaunchConfiguration('odometry_config')}.items())])
+                              'odometry_config': LaunchConfiguration('odometry_config'),
+                              'start_odometry': LaunchConfiguration('start_odometry')}.items())])

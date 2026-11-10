@@ -42,8 +42,20 @@ def build(context):
             raise ValueError('segmentation_timeout must be positive')
         tracking_extra['segmentation_timeout'] = timeout
     def node(package, executable, name, remappings=(), extra=None):
+        # Keep perception diagnostics and startup waiting warnings out of task output.
+        # Named logger overrides leave planner readiness and task controls visible.
+        loggers = {
+            'sam_tracking': ['sam_tracking:=error'],
+            'sam_tracking_node': ['flyco.sam_tracking:=error'],
+        }.get(name, [])
+        arguments = []
+        if loggers:
+            arguments.append('--ros-args')
+            for logger in loggers:
+                arguments.extend(['--log-level', logger])
         action = Node(package=package, executable=executable, name=name,
                       parameters=[str(config), extra or {}], remappings=list(remappings), output='screen',
+                      arguments=arguments,
                       prefix=[shlex.quote(python)] if python and executable.endswith('.py') else None)
         actions.append(action)
         critical.append(action)
@@ -91,7 +103,7 @@ def generate_launch_description():
         DeclareLaunchArgument('start_sensors', default_value='true'),
         DeclareLaunchArgument('odin_calibration_file', default_value=''),
         DeclareLaunchArgument('odometry_config', default_value=str(
-            Path(get_package_share_directory('ros2_px4_odometry')) / 'config/odin_config.yaml')),
+            Path(get_package_share_directory('ros2_px4_odometry')) / 'config/odin.yaml')),
         DeclareLaunchArgument('start_mode', default_value='true'),
         DeclareLaunchArgument('python_executable', default_value=''),
         DeclareLaunchArgument('segmentation_endpoint', default_value='',
